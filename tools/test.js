@@ -143,6 +143,8 @@ Promise.all([testResults, jsHint]).spread(function(_, jsHintResponse) {
         console.log(jsHintResponse.stdout);
         console.log(jsHintResponse.stderr);
     }
+}).then(function() {
+    process.exit(0);
 }).catch(function(e) {
     if (e && e.stdout || e.stderr) {
         console.log(e.stdout);
