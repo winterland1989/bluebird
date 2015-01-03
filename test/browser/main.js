@@ -1,7 +1,6 @@
 var Promise = require("../../js/debug/bluebird.js");
 window.Promise = Promise;
 window.adapter = Promise;
-window.sinon = require("sinon");
 window.assert = require("assert");
 
 var prev = window.assert.deepEqual;
@@ -22,12 +21,6 @@ window.assert.deepEqual = function(a, b) {
     }
 };
 
-function closeServer() {
-  if (window.isCI === false) {
-
-  }
-}
-
 window.setImmediate = function(fn){
     setTimeout(fn, 0);
 };
@@ -39,7 +32,6 @@ window.onload = function(){
     runner.on('end', function(){
       window.mochaResults = runner.stats;
       window.mochaResults.reports = failedTests;
-      closeServer();
     });
 
     runner.on('fail', logFailure);
@@ -58,5 +50,3 @@ window.onload = function(){
       failedTests.push({name: test.title, result: false, message: err.message, stack: err.stack, titles: flattenTitles(test) });
     }
 };
-
-window.onbeforeunload = closeServer;
