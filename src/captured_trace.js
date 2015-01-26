@@ -118,6 +118,13 @@ function removeDuplicateOrEmptyJumps(stacks) {
             i--;
         }
     }
+
+    for (var i = 0; i < stacks.length; ++i) {
+        if (!stacks[i]) {
+            stacks.splice(i, 1);
+            i--;
+        }
+    }
 }
 
 function removeCommonRoots(stacks) {
