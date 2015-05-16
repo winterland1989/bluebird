@@ -114,9 +114,9 @@ var clicked = new Promise(function(resolve) {
 
 ##Coming from `async` module
 
-When working with promises the philosophy is basically a complete opposite than when using `async`. Async provides a bag of inflexible uncomposable helper functions that work at a very low level of abstraction. When using promises you can get the utility otherwise provided by uncountable amount of inflexible helper functions by just combining and composing a few existing functions and concepts.
+When working with promises the philosophy is basically a complete opposite than when using `async`. Async provides a huge bag of uncomposable helper functions that work at a very low level of abstraction. When using promises you can get the utility otherwise provided by uncountable amount of inflexible helper functions by just combining and composing a few existing functions and concepts.
 
-That means when you have a problem there probably isn't an existing function tailored exactly to that problem but instead you can just combine the existing utilities to arrive at a solution. The upside of this is that you don't need to come up with a new separate function for every little problem that are really not that different from each other. The most important thing to do when migrating from async to bluebird is this profound shift in philosophy.
+That means when you have a problem there probably isn't an existing function tailored exactly to that problem but instead you can just combine the existing utilities to arrive at a solution. The upside of this is that you don't need to come up with all these different functions to solve problems that are not that different from each other. The most important thing to do when migrating from async to bluebird is this profound shift in philosophy.
 
 This section lists the most common async module replacements.
 
@@ -185,7 +185,7 @@ function(err, results){
 
 ```js
 Promise.each([{timeout: 200, value: 1},
-              {timeout: 100, value: 2}], function(item) {
+              {timeout: 100, value: 2}], function(item) {
     return Promise.delay(item.value, item.timeout);
 }).then(function(results) {
     // results is now equal to [1, 2]
