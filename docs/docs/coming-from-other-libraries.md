@@ -114,33 +114,160 @@ var clicked = new Promise(function(resolve) {
 
 ##Coming from `async` module
 
-Due to how promises compose and work naturally with the language, you can get the utility otherwise provided by a thousand narrow inflexible helper functions by just combining and composing a few existing functions and concepts.
+When working with promises the philosophy is basically a complete opposite than when using `async`. Async provides a bag of inflexible uncomposable helper functions that work at a very low level of abstraction. When using promises you can get the utility otherwise provided by uncountable amount of inflexible helper functions by just combining and composing a few existing functions and concepts.
+
+That means when you have a problem there probably isn't an existing function tailored exactly to that problem but instead you can just combine the existing utilities to arrive at a solution. The upside of this is that you don't need to come up with a new separate function for every little problem that are really not that different from each other. The most important thing to do when migrating from async to bluebird is this profound shift in philosophy.
 
 This section lists the most common async module replacements.
 
 ###`async.waterfall`
 
-If the waterfall elements are static, you can just replace it with a normal promise chain. For waterfalls with dynamic steps, use [Promise.each](.).
+If the waterfall elements are static, you can just replace it with a normal promise chain. For waterfalls with dynamic steps, use [Promise.each](.). Multiple arguments can be ferried in an array.
+
+Implementing the example from [async homepage](https://github.com/caolan/async#waterfalltasks-callback)
+
+```js
+async.waterfall([
+    function(callback) {
+        callback(null, 'one', 'two');
+    },
+    function(arg1, arg2, callback) {
+      // arg1 now equals 'one' and arg2 now equals 'two'
+        callback(null, 'three');
+    },
+    function(arg1, callback) {
+        // arg1 now equals 'three'
+        callback(null, 'done');
+    }
+], function (err, result) {
+    // result now equals 'done'
+});
+```
+
+Since the array passed to waterfall is static (always the same 3 functions) a plain old promise chain is used:
+
+```js
+Promise.resolve(['one', 'two']).spread(function(arg1, arg2) {
+    // arg1 now equals 'one' and arg2 now equals 'two'
+    return 'three';
+}).then(function(arg1) {
+    // arg1 now equals 'three'
+    return 'done';
+}).then(function(result) {
+    // result now equals 'done'
+});
+```
+
+If destructuring parameters are supported, `.spread(function(arg1, arg2) {})` can be replaced with `.then(function([arg1, arg2]){})`.
 
 ###`async.series`
 
-If the series elements are static, you can just replace it with a normal promise chain. For series with dynamic steps, use [Promise.each](.).
+Using [Promise.each](.) to implement the example from [async homepage](https://github.com/caolan/async#seriestasks-callback):
+
+```js
+async.series([
+    function(callback){
+        setTimeout(function(){
+            callback(null, 1);
+        }, 200);
+    },
+    function(callback){
+        setTimeout(function(){
+            callback(null, 2);
+        }, 100);
+    }
+],
+// optional callback
+function(err, results){
+    // results is now equal to [1, 2]
+});
+```
+
+```js
+Promise.each([{timeout: 200, value: 1},
+              {timeout: 100, value: 2}], function(item) {
+    return Promise.delay(item.value, item.timeout);
+}).then(function(results) {
+    // results is now equal to [1, 2]
+});
+```
+
 
 ###`async.parallel`
 
-[Promise.all](.)
+Using [Promise.all](.) to implement the example from [async homepage](https://github.com/caolan/async#parallel):
+
+```js
+async.parallel([
+    function(callback){
+        setTimeout(function(){
+            callback(null, 'one');
+        }, 200);
+    },
+    function(callback){
+        setTimeout(function(){
+            callback(null, 'two');
+        }, 100);
+    }
+],
+// optional callback
+function(err, results){
+    // the results array will equal ['one','two'] even though
+    // the second function had a shorter timeout.
+});
+```
+
+```js
+Promise.all([Promise.delay('one', 200),
+             Promise.delay('two', 100)]).then(function(results) {
+    // the results array will equal ['one','two'] even though
+    // the second function had a shorter timeout.
+});
+```
 
 ###`async.mapSeries`
 
-[Promise.each](.)
+Using [Promise.each](.) to implement the example from [async homepage](https://github.com/caolan/async#maparr-iterator-callback):
+
+```js
+var fs = require('fs');
+async.mapSeries(['file1','file2','file3'], fs.stat, function(err, results){
+    // results is now an array of stats for each file
+});
+```
+
+```js
+var fs = Promise.promisifyAll(require('fs'));
+Promise.each(['file1','file2','file3'], function(fileName, index, length) {
+    return fs.statAsync(fileName);
+}).then(function(results) {
+    // results is now an array of stats for each file
+});
+```
 
 ###`async.map`
 
-[Promise.map](.)
+Using [Promise.map](.) to implement the example from [async homepage](https://github.com/caolan/async#maparr-iterator-callback):
+
+```js
+var fs = require('fs');
+async.map(['file1','file2','file3'], fs.stat, function(err, results){
+    // results is now an array of stats for each file
+});
+```
+
+```
+var fs = Promise.promisifyAll(require('fs'));
+Promise.map(['file1','file2','file3'], function(fileName, index, length) {
+    return fs.statAsync(fileName);
+}).then(function(results) {
+    // results is now an array of stats for each file
+});
+```
 
 ###`async.whilst`
 
-Recursion. E.g.
+Using recursion to implement the example from [async homepage](https://github.com/caolan/async#whilsttest-fn-callback):
 
 ```js
 var count = 0;
@@ -167,8 +294,7 @@ async.whilst(
 });
 ```
 
-Basically almost the whole `async` library can be expressed with some combination of [Promise.each](.), [Promise.map](.) or just plain promise usage combined with standard language features such as recursion.
-
+Be warned that the above example implementations are only superficially equivalent. Callbacks, even with the help of async, require too much boilerplate code to provide the same guarantees as promises.
 
 ##Coming from Q
 
