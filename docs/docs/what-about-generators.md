@@ -3,58 +3,48 @@ id: what-about-generators
 title: What About Generators?
 ---
 
-## Promises compliment generators and coroutines!
+You might know about a little trick you can do with generators where asynchronous code can be made look like synchronous:
 
-A lot of people tend to think that generators/coroutines and promises are two different ways of modelling asynchronous behavior.
+```js
+function run(fn) {
+    var generator = fn();
+    (function loop(result) {
+        if (!result.done) {
+            result.value(function() {
+                loop(generator.next());
+            });
+        }
+    })(generator.next());
+}
 
-They're not!
+function sleep(ms) {
+    return function(cb) {
+        setTimeout(cb, ms);
+    };
+}
 
-With the use of `Promise.coroutine()` we can turn any `GeneratorFunction` constructor (any generator) into a coroutine
-that yields resolved promises! (Those of you who are familiar with the `await/async` syntax from C# might get a slight
-deja-vu)
-
-```javascript
-let myAsyncFn = Promise.coroutine(function*() {
-    try {
-        let [urlResponse, urlBody] = yield request.getAsync("http://some.api.com/url");
-        if (urlResponse.code !== 200) { throw new Error('Getting URL failed! Got ' + urlResponse.code); }
-        urlObj = JSON.parse(urlBody);
-        let [apiResponse, apiBody] = yield request.getAsync(urlObj.url);
-        if (apiResponse.code !== 200) { throw new Error('API call failed! Got ' + apiResponse.code); }
-        return JSON.parse(apiBody); 
-    } catch (err) {
-        console.log("Had an error!", err);
-    }
+run(function* () {
+   yield sleep(1000);
+   console.log("1 second passed");
+   yield sleep(1000);
+   console.log("1 second passed");
+   yield sleep(1000);
+   console.log("1 second passed");
 });
 ```
 
-`myAsyncFn` is now a normal function, that returns a promise, in this case, the promise will resolve with the response
-from the API call of the URL gotten from http://some.api.com/url
+*\(You can play with this example at: http://jsfiddle.net/ewg9p6gg/\)*
 
-The above is equivalent to:
+When the function "is sleeping", it isn't blocking the process (though it's blocking itself of course). You might suppose that this is enough to solve all the asynchronous problems, as if you were having your cake and eating it too and now you can forget about callbacks and promises. That is just toy example fallacy at work.
 
-```javascript
-function myAsyncFn() {
-    return request.getAsync("http://some.api.com/url")
-        .then(([urlResponse, urlBody]) => {
-            if (urlResponse.code !== 200) { return Promise.reject(new Error('Getting URL failed! Got ' + urlResponse.code)); }
-            return JSON.parse(urlBody);
-        })
-        .then(urlObj => request.getAsync(urlObj.url))
-        .then(([apiResponse, apiBody]) => {
-            if (apiResponse.code !== 200) { return Promise.reject(new Error('API call failed! Got ' + apiResponse.code)); }
-            return JSON.parse(apiBody);
-        })
-        .catch(err => console.log("Had an error!", err));
-}
-```
+What are some differences between real world code and toy examples?
 
-So basically, it makes our asynchronous function read like a normal, synchronous function, while keeping all of the
-qualities of Promise based API.
+ - The need for concurrency
+ - The need to reuse existing and well known utilities
+ - Error handling
+ - Resource management
 
-## Keeping track of things
+## Need for concurrency
 
-Coroutines are also a great way of keeping track of the various variables and values of resolved promises along the chain.
 
-For example, in the above snippets, you'd be able to access `urlObj` anywhere after it's defined in the coroutine example, but
-you'd have to jump through hoops to use it anywhere outside of its designated `.then()` handler in a normal promise chain.
+
