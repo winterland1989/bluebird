@@ -31,7 +31,7 @@ class Redcarpet::Render::HTML
             if content =~ /#\d+/
                 url = "https://github.com/petkaantonov/bluebird/issues/" + content[1..-1]
             else
-                url = "/bluebird/web/docs/api-reference.html#" + Helpers.clean(content)
+                url = "/docs/api/" + Helpers.clean(content) + ".html"
             end
             return <<-eos
                 <a href="#{url}"><code>#{content}</code></a>
