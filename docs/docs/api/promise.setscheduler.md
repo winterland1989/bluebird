@@ -23,7 +23,7 @@ Promise.setScheduler(function(fn) {
 });
 ```
 
-Setting a custom scheduler could be necessary when you need a faster way to schedule functions than bluebird does by default.
+Setting a custom scheduler could be necessary when you need a faster way to schedule functions than bluebird does by default. It also makes bluebird possible to use in platforms where normal timing constructs like `setTimeout` and `process.nextTick` are not available (like Nashhorn).
 
 You can also use it as a hook:
 
@@ -34,6 +34,9 @@ Promise.setScheduler(function(fn) {
     $rootScope.$evalAsync(fn);
 });
 ```
+
+> **Danger** - in order to keep bluebird promises [Promises/A+](http://www.promisesaplus) compliant a scheduler that executes the function asynchronously (like the examples in this page) must be used. 
+
 </markdown></div>
 
 <div id="disqus_thread"></div>
