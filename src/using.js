@@ -1,22 +1,11 @@
 "use strict";
 module.exports = function (Promise, apiRejection, tryConvertToPromise,
-    createContext) {
-    var TypeError = require("./errors.js").TypeError;
-    var inherits = require("./util.js").inherits;
-    var PromiseInspection = Promise.PromiseInspection;
-
-    function inspectionMapper(inspections) {
-        var len = inspections.length;
-        for (var i = 0; i < len; ++i) {
-            var inspection = inspections[i];
-            if (inspection.isRejected()) {
-                // Cheaper than throwing
-                return Promise.reject(inspection.error());
-            }
-            inspections[i] = inspection._settledValue;
-        }
-        return inspections;
-    }
+    createContext, INTERNAL, debug) {
+    var util = require("./util");
+    var TypeError = require("./errors").TypeError;
+    var inherits = require("./util").inherits;
+    var errorObj = util.errorObj;
+    var tryCatch = util.tryCatch;
 
     function thrower(e) {
         setTimeout(function(){throw e;}, 0);
@@ -35,9 +24,9 @@ module.exports = function (Promise, apiRejection, tryConvertToPromise,
     function dispose(resources, inspection) {
         var i = 0;
         var len = resources.length;
-        var ret = Promise.defer();
+        var ret = new Promise(INTERNAL);
         function iterator() {
-            if (i >= len) return ret.resolve();
+            if (i >= len) return ret._fulfill();
             var maybePromise = castPreservingDisposable(resources[i++]);
             if (maybePromise instanceof Promise &&
                 maybePromise._isDisposable()) {
@@ -56,21 +45,7 @@ module.exports = function (Promise, apiRejection, tryConvertToPromise,
             iterator();
         }
         iterator();
-        return ret.promise;
-    }
-
-    function disposerSuccess(value) {
-        var inspection = new PromiseInspection();
-        inspection._settledValue = value;
-        inspection._bitField = IS_FULFILLED;
-        return dispose(this, inspection).thenReturn(value);
-    }
-
-    function disposerFail(reason) {
-        var inspection = new PromiseInspection();
-        inspection._settledValue = reason;
-        inspection._bitField = IS_REJECTED;
-        return dispose(this, inspection).thenThrow(reason);
+        return ret;
     }
 
     function Disposer(data, promise, context) {
@@ -130,13 +105,30 @@ module.exports = function (Promise, apiRejection, tryConvertToPromise,
         return value;
     }
 
+    function ResourceList(length) {
+        this.length = length;
+        this.promise = null;
+        this[length-1] = null;
+    }
+
+    ResourceList.prototype._resultCancelled = function() {
+        var len = this.length;
+        for (var i = 0; i < len; ++i) {
+            var item = this[i];
+            if (item instanceof Promise) {
+                item.cancel();
+            }
+        }
+    };
+
     Promise.using = function () {
         var len = arguments.length;
         if (len < 2) return apiRejection(
                         "you must pass at least 2 arguments to Promise.using");
         var fn = arguments[len - 1];
-        if (typeof fn !== "function") return apiRejection(NOT_FUNCTION_ERROR);
-
+        if (typeof fn !== "function") {
+            return apiRejection(FUNCTION_ERROR + util.classString(fn));
+        }
         var input;
         var spreadArgs = true;
         if (len === 2 && Array.isArray(arguments[0])) {
@@ -147,7 +139,7 @@ module.exports = function (Promise, apiRejection, tryConvertToPromise,
             input = arguments;
             len--;
         }
-        var resources = new Array(len);
+        var resources = new ResourceList(len);
         for (var i = 0; i < len; ++i) {
             var resource = input[i];
             if (Disposer.isDisposer(resource)) {
@@ -167,22 +159,41 @@ module.exports = function (Promise, apiRejection, tryConvertToPromise,
             resources[i] = resource;
         }
 
-        var promise = Promise.settle(resources)
-            .then(inspectionMapper)
-            .then(function(vals) {
-                promise._pushContext();
-                var ret;
-                try {
-                    ret = spreadArgs
-                        ? fn.apply(undefined, vals) : fn.call(undefined,  vals);
-                } finally {
-                    promise._popContext();
+        var reflectedResources = new Array(resources.length);
+        for (var i = 0; i < reflectedResources.length; ++i) {
+            reflectedResources[i] = Promise.resolve(resources[i]).reflect();
+        }
+
+        var resultPromise = Promise.all(reflectedResources)
+            .then(function(inspections) {
+                for (var i = 0; i < inspections.length; ++i) {
+                    var inspection = inspections[i];
+                    if (inspection.isRejected()) {
+                        errorObj.e = inspection.error();
+                        return errorObj;
+                    } else if (!inspection.isFulfilled()) {
+                        resultPromise.cancel();
+                        return;
+                    }
+                    inspections[i] = inspection.value();
                 }
+                promise._pushContext();
+
+                fn = tryCatch(fn);
+                var ret = spreadArgs
+                    ? fn.apply(undefined, inspections) : fn(inspections);
+                var promiseCreated = promise._popContext();
+                debug.checkForgottenReturns(
+                    ret, promiseCreated, "Promise.using", promise);
                 return ret;
-            })
-            ._then(
-                disposerSuccess, disposerFail, undefined, resources, undefined);
+            });
+
+        var promise = resultPromise.lastly(function() {
+            var inspection = new Promise.PromiseInspection(resultPromise);
+            return dispose(resources, inspection);
+        });
         resources.promise = promise;
+        promise._setOnCancel(resources);
         return promise;
     };
 

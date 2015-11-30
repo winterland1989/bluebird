@@ -1,23 +1,8 @@
 "use strict";
-var ASSERT = require("./assert.js");
-var es5 = require("./es5.js");
+var ASSERT = require("./assert");
+var es5 = require("./es5");
 // Assume CSP if browser
 var canEvaluate = typeof navigator == "undefined";
-var haveGetters = (function(){
-    try {
-        var o = {};
-        es5.defineProperty(o, "f", {
-            get: function () {
-                return 3;
-            }
-        });
-        return o.f === 3;
-    }
-    catch (e) {
-        return false;
-    }
-
-})();
 
 //Try catch is not supported in optimizing
 //compiler, so it is isolated
@@ -68,7 +53,8 @@ function isPrimitive(val) {
 }
 
 function isObject(value) {
-    return !isPrimitive(value);
+    return typeof value === "function" ||
+           typeof value === "object" && value !== null;
 }
 
 function maybeWrapAsError(maybeError) {
@@ -209,10 +195,10 @@ function isClass(fn) {
 
 function toFastProperties(obj) {
     /*jshint -W027,-W055,-W031*/
-    function f() {}
-    f.prototype = obj;
+    function FakeConstructor() {}
+    FakeConstructor.prototype = obj;
     var l = 8;
-    while (l--) new f();
+    while (l--) new FakeConstructor();
     ASSERT("%HasFastProperties", true, obj);
     return obj;
     eval(obj);
@@ -287,6 +273,43 @@ function copyDescriptors(from, to, filter) {
     }
 }
 
+var asArray = function(v) {
+    if (es5.isArray(v)) {
+        return v;
+    }
+    return null;
+};
+
+if (typeof Symbol !== "undefined" && Symbol.iterator) {
+    var ArrayFrom = typeof Array.from === "function" ? function(v) {
+        return Array.from(v);
+    } : function(v) {
+        var ret = [];
+        var it = v[Symbol.iterator]();
+        var itResult;
+        while (!((itResult = it.next()).done)) {
+            ret.push(itResult.value);
+        }
+        return ret;
+    };
+
+    asArray = function(v) {
+        if (es5.isArray(v)) {
+            return v;
+        } else if (v != null && typeof v[Symbol.iterator] === "function") {
+            return ArrayFrom(v);
+        }
+        return null;
+    };
+}
+
+var isNode = typeof process !== "undefined" &&
+        classString(process).toLowerCase() === "[object process]";
+
+function env(key, def) {
+    return isNode ? process.env[key] : def;
+}
+
 var ret = {
     isClass: isClass,
     isIdentifier: isIdentifier,
@@ -294,7 +317,7 @@ var ret = {
     getDataPropertyOrDefault: getDataPropertyOrDefault,
     thrower: thrower,
     isArray: es5.isArray,
-    haveGetters: haveGetters,
+    asArray: asArray,
     notEnumerableProp: notEnumerableProp,
     isPrimitive: isPrimitive,
     isObject: isObject,
@@ -315,8 +338,8 @@ var ret = {
     copyDescriptors: copyDescriptors,
     hasDevTools: typeof chrome !== "undefined" && chrome &&
                  typeof chrome.loadTimes === "function",
-    isNode: typeof process !== "undefined" &&
-        classString(process).toLowerCase() === "[object process]"
+    isNode: isNode,
+    env: env
 };
 ret.isRecentNode = ret.isNode && (function() {
     var version = process.versions.node.split(".").map(Number);

@@ -5,8 +5,8 @@ var isNodeJS = testUtils.isNodeJS;
 var OldPromise = require("./helpers/bluebird0_7_0.js");
 
 if (isNodeJS) {
-    var Promise1 = require("../../js/debug/promise.js")();
-    var Promise2 = require("../../js/debug/promise.js")();
+    var Promise1 = testUtils.addDeferred(require("../../js/debug/promise.js")());
+    var Promise2 = testUtils.addDeferred(require("../../js/debug/promise.js")());
 
     var err1 = new Error();
     var err2 = new Error();
@@ -67,44 +67,10 @@ if (isNodeJS) {
             assert(a.promise._receiver0 === b);
         });
 
-        specify("Should pass through progress with fast cast", function(){
-            var a = Promise1.defer();
-            var b = Promise2.cast(a.promise);
-            var test = 0;
-            b.then(function() {
-                test++;
-            }, null, function() {
-                test++;
-            });
-
-            a.progress();
-            a.resolve();
-            return Promise.delay(1).then(function() {
-                assert.equal(test, 2);
-            });
-        });
-
         specify("Should use fast cast with very old version", function() {
             var a = OldPromise.pending();
             var b = Promise1.cast(a.promise);
             assert(a.promise._receiver0 === b);
-        });
-
-        specify("Should pass through progress with fast cast with very old version", function(){
-            var a = OldPromise.pending();
-            var b = Promise1.cast(a.promise);
-            var test = 0;
-            b.then(function() {
-                test++;
-            }, null, function() {
-                test++;
-            });
-
-            a.progress();
-            a.fulfill();
-            return Promise.delay(1).then(function() {
-                assert.equal(test, 2);
-            });
         });
 
         specify("Should return 2 from very old promise", function() {

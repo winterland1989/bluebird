@@ -59,41 +59,6 @@ describe("Promise.resolve", function() {
     });
 });
 
-describe("PromiseResolver.resolve", function() {
-    specify("follows thenables and promises", function() {
-        var values = getValues();
-        var async = false;
-
-        var d1 = Promise.defer();
-        var d2 = Promise.defer();
-        var d3 = Promise.defer();
-        var d4 = Promise.defer();
-        var d5 = Promise.defer();
-        var d6 = Promise.defer();
-        var arr = [];
-
-        d1.resolve(values.value);
-        arr.push(d1.promise.then(testUtils.noop));
-        d2.resolve(values.thenableFulfill);
-        arr.push(d2.promise.then(testUtils.noop));
-        d3.resolve(values.thenableReject);
-        arr.push(d3.promise.then(assert.fail, testUtils.noop));
-        d4.resolve(values.promiseFulfilled);
-        arr.push(d4.promise.then(testUtils.noop));
-        d5.resolve(values.promiseRejected);
-        arr.push(d5.promise.then(assert.fail, testUtils.noop));
-        d6.resolve(values.promiseEventual);
-        arr.push(d6.promise.then(testUtils.noop));
-
-        var ret = Promise.all(arr).then(function(v) {
-            assert.deepEqual(v, [3, 3, 3, 3, 3, 3]);
-            assert(async);
-        });
-        async = true;
-        return ret;
-    });
-});
-
 describe("Cast thenable", function() {
     var b = {
         then: function(f, fn){
@@ -126,122 +91,8 @@ describe("Implicitly cast thenable", function() {
     });
 });
 
-/*
-Copyright 2009–2012 Kristopher Michael Kowal. All rights reserved.
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to
-deal in the Software without restriction, including without limitation the
-rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
-sell copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
-IN THE SOFTWARE.
-*/
 
 
-describe("PromiseResolver", function () {
-
-    describe(".callback", function() {
-        it("fulfills a promise with a single callback argument", function() {
-            var resolver = Promise.defer();
-            resolver.callback(null, 10);
-            return resolver.promise.then(function (value) {
-                assert(value === 10);
-            });
-        });
-
-        it("fulfills a promise with multiple callback arguments", function() {
-            var resolver = Promise.defer();
-            resolver.callback(null, 10, 20);
-            return resolver.promise.then(function (value) {
-                assert.deepEqual(value, [ 10, 20 ]);
-            });
-        });
-
-        it("rejects a promise", function() {
-            var resolver = Promise.defer();
-            var exception = new Error("Holy Exception of Anitoch");
-            resolver.callback(exception);
-            return resolver.promise.then(assert.fail, function (_exception) {
-                assert(exception === _exception.cause);
-            });
-        });
-    });
-
-    specify(".toString()", function() {
-        assert.strictEqual(Promise.defer().toString(), "[object PromiseResolver]");
-    });
-
-    specify(".cancel()", function() {
-        var err = new Error();
-        var d = Promise.defer();
-        d.promise.cancellable();
-        d.cancel(err);
-        return d.promise.then(assert.fail, function(e) {
-            assert.strictEqual(err, e);
-        });
-    });
-
-    specify(".timeout()", function() {
-        var d = Promise.defer();
-        d.timeout();
-        return d.promise.then(assert.fail, function(e) {
-            assert(e instanceof Promise.TimeoutError);
-        });
-    });
-
-    specify(".isResolved()", function() {
-        var d = Promise.defer();
-        assert.strictEqual(d.isResolved(), false);
-    });
-
-    specify(".toJSON()", function() {
-        var d = Promise.defer();
-        assert.equal(JSON.stringify(d), '{"isFulfilled":false,"isRejected":false}');
-    });
-
-    describe("unbound calls should throw", function() {
-        specify(".resolve", function() {
-            var resolve = Promise.defer().resolve;
-            try {
-                resolve()
-            } catch (e) {
-                assert(e.message.indexOf("Illegal invocation") >= 0);
-                return;
-            }
-            assert.fail()
-        });
-        specify(".reject", function() {
-            var reject = Promise.defer().reject;
-            try {
-                reject()
-            } catch (e) {
-                assert(e.message.indexOf("Illegal invocation") >= 0);
-                return;
-            }
-            assert.fail()
-        });
-        specify(".progress", function() {
-            var progress = Promise.defer().progress;
-            try {
-                progress()
-            } catch (e) {
-                assert(e.message.indexOf("Illegal invocation") >= 0);
-                return;
-            }
-            assert.fail()
-        });
-    });
-});
 
 /*!
  *
@@ -325,84 +176,6 @@ describe("propagation", function () {
         return a.promise.then(function (eh) {
             assert.equal(eh, 10);
         });
-    });
-
-    it("should propagate progress by default", function () {
-        var d = Promise.defer();
-
-        var progressValues = [];
-        var promise = d.promise
-        .then()
-        .then(
-            function () {
-                assert.deepEqual(progressValues, [1]);
-            },
-            function () {
-                assert.equal(true,false);
-            },
-            function (progressValue) {
-                progressValues.push(progressValue);
-            }
-        );
-
-        d.progress(1);
-        d.resolve();
-
-        return promise;
-    });
-
-    it("should allow translation of progress in the progressback", function () {
-        var d = Promise.defer();
-
-        var progressValues = [];
-        var promise = d.promise
-        .progressed(function (p) {
-            return p + 5;
-        })
-        .then(
-            function () {
-                assert.deepEqual(progressValues, [10]);
-            },
-            function () {
-                assert.equal(true,false);
-            },
-            function (progressValue) {
-                progressValues.push(progressValue);
-            }
-        );
-
-        d.progress(5);
-        d.resolve();
-
-        return promise;
-    });
-
-    //Addiotion: It should NOT but it was actually unspecced what should be the value
-    it("should NOT stop progress propagation if an error is thrown", function () {
-        var def = Promise.defer();
-        var e = new Error("boo!");
-        var p2 = def.promise.progressed(function () {
-            throw e
-        });
-
-        Promise.onerror = function () { /* just swallow it for this test */ };
-
-        var progressValues = [];
-        var result = p2.then(
-            function () {
-                assert.deepEqual(progressValues, [e]);
-            },
-            function () {
-                assert.equal(true,false);
-            },
-            function (progressValue) {
-                progressValues.push(progressValue);
-            }
-        );
-
-        def.progress();
-        def.resolve();
-        return result;
     });
 });
 
@@ -576,222 +349,6 @@ describe("Promise.defer-test", function () {
             }
         );
     });
-
-
-
-    specify("should notify of progress updates", function() {
-        var d = Promise.defer();
-
-        var ret = d.promise.then(
-            assert.fail,
-            assert.fail,
-            function(val) {
-                assert.equal(val, sentinel);
-                ret._resolveCallback();
-            }
-        );
-
-        d.progress(sentinel);
-        return ret;
-    });
-
-    specify("should propagate progress to downstream promises", function() {
-        var d = Promise.defer();
-
-        var ret =  d.promise
-        .then(assert.fail, assert.fail,
-            function(update) {
-                return update;
-            }
-        )
-        .then(assert.fail, assert.fail,
-            function(update) {
-                assert.equal(update, sentinel);
-                ret._resolveCallback();
-            }
-        );
-
-        d.progress(sentinel);
-        return ret;
-    });
-
-    specify("should propagate transformed progress to downstream promises", function() {
-        var d = Promise.defer();
-
-        var ret = d.promise
-        .then(assert.fail, assert.fail,
-            function() {
-                return sentinel;
-            }
-        )
-        .then(assert.fail, assert.fail,
-            function(update) {
-                assert.equal(update, sentinel);
-                ret._resolveCallback();
-            }
-        );
-
-        d.progress(other);
-        return ret;
-    });
-
-    specify("should propagate caught exception value as progress", function() {
-        var d = Promise.defer();
-
-        var ret = d.promise
-        .then(assert.fail, assert.fail,
-            function() {
-                throw sentinel;
-            }
-        )
-        .then(assert.fail, assert.fail,
-            function(update) {
-                assert.equal(update, sentinel);
-                ret._resolveCallback();
-            }
-        );
-
-        d.progress(other);
-        return ret;
-    });
-
-    specify("should forward progress events when intermediary callback (tied to a resolved promise) returns a promise", function() {
-        var d, d2;
-
-        d = Promise.defer();
-        d2 = Promise.defer();
-
-        // resolve d BEFORE calling attaching progress handler
-        d.resolve();
-
-        var ret = d.promise.then(
-            function() {
-                var ret = Promise.defer();
-                setTimeout(function(){
-                    ret.progress(sentinel);
-                }, 1)
-                return ret.promise;
-            }
-        ).then(null, null,
-            function onProgress(update) {
-                assert.equal(update, sentinel);
-                ret._resolveCallback();
-            }
-        );
-        return ret;
-    });
-
-    specify("should forward progress events when intermediary callback (tied to an unresovled promise) returns a promise", function() {
-        var d = Promise.defer();
-
-        var ret = d.promise.then(
-            function() {
-                var ret = Promise.defer();
-                setTimeout(function(){
-                    ret.progress(sentinel);
-                }, 1)
-                return ret.promise;
-            }
-        ).then(null, null,
-            function onProgress(update) {
-                assert.equal(update, sentinel);
-                ret._resolveCallback();
-            }
-        );
-
-        // resolve d AFTER calling attaching progress handler
-        d.resolve();
-        return ret;
-    });
-
-    specify("should forward progress when resolved with another promise", function() {
-        var d, d2;
-
-        d = Promise.defer();
-        d2 = Promise.defer();
-
-        var ret = d.promise
-        .then(assert.fail, assert.fail,
-            function() {
-                return sentinel;
-            }
-        )
-        .then(assert.fail, assert.fail,
-            function(update) {
-                assert.equal(update, sentinel);
-                ret._resolveCallback();
-            }
-        );
-
-        d.resolve(d2.promise);
-
-        d2.progress();
-        return ret;
-    });
-
-    specify("should allow resolve after progress", function() {
-        var d = Promise.defer();
-
-        var progressed = false;
-        var ret = d.promise.then(
-            function() {
-                assert(progressed);
-            },
-            assert.fail,
-            function() {
-                progressed = true;
-            }
-        );
-
-        d.progress();
-        d.resolve();
-        return ret;
-    });
-
-    specify("should allow reject after progress", function() {
-        var d = Promise.defer();
-
-        var progressed = false;
-        var ret = d.promise.then(
-            assert.fail,
-            function() {
-                assert(progressed);
-            },
-            function() {
-                progressed = true;
-            }
-        );
-
-        d.progress();
-        d.reject();
-        return ret;
-    });
-
-    specify("should be indistinguishable after resolution", function() {
-        var d, before, after;
-
-        d = Promise.defer();
-
-        before = d.progress(sentinel);
-        d.resolve();
-        after = d.progress(sentinel);
-
-        assert.equal(before, after);
-    });
-
-    specify("should return silently on progress when already resolved", function() {
-        var d = Promise.defer();
-        d.resolve();
-
-        assert(undefined === d.progress());
-    });
-
-    specify("should return silently on progress when already rejected", function() {
-        var d = Promise.defer();
-        d.reject();
-        d.promise.then(assert.fail, function(){});
-        assert(undefined === d.progress());
-    });
 });
 
 describe("Promise.fromNode", function() {
@@ -829,5 +386,49 @@ describe("Promise.fromNode", function() {
         return Promise.fromNode(nodeFn.bind(null, 1)).then(function(res) {
             assert.strictEqual(1, res);
         });
+    });
+    specify("multiArgs option enabled single value", function() {
+        var nodeFn = function(cb) {
+            cb(null, 1);
+        };
+        return Promise.fromNode(function(callback) {
+            nodeFn(callback);
+        }, {multiArgs: true}).then(function(value) {
+            assert.deepEqual([1], value);
+        });
+
+    });
+    specify("multiArgs option enabled multi value", function() {
+        var nodeFn = function(cb) {
+            cb(null, 1, 2, 3);
+        };
+        return Promise.fromNode(function(callback) {
+            nodeFn(callback);
+        }, {multiArgs: true}).then(function(value) {
+            assert.deepEqual([1,2,3], value);
+        });
+
+    });
+    specify("multiArgs option disabled single value", function() {
+        var nodeFn = function(cb) {
+            cb(null, 1);
+        };
+        return Promise.fromNode(function(callback) {
+            nodeFn(callback);
+        }).then(function(value) {
+            assert.strictEqual(1, value);
+        });
+
+    });
+    specify("multiArgs option disabled multi value", function() {
+        var nodeFn = function(cb) {
+            cb(null, 1, 2, 3);
+        };
+        return Promise.fromNode(function(callback) {
+            nodeFn(callback);
+        }).then(function(value) {
+            assert.strictEqual(1, value);
+        });
+
     });
 });

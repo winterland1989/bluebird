@@ -1,5 +1,6 @@
 "use strict";
-module.exports = function(Promise, INTERNAL, tryConvertToPromise) {
+module.exports = function(Promise, INTERNAL, tryConvertToPromise, debug) {
+var calledBind = false;
 var rejectThis = function(_, e) {
     this._reject(e);
 };
@@ -10,7 +11,7 @@ var targetRejected = function(e, context) {
 };
 
 var bindingResolved = function(thisArg, context) {
-    if (this._isPending()) {
+    if (BIT_FIELD_CHECK(IS_PENDING_AND_WAITING_NEG, this._bitField)) {
         this._resolveCallback(context.target);
     }
 };
@@ -20,11 +21,15 @@ var bindingRejected = function(e, context) {
 };
 
 Promise.prototype.bind = function (thisArg) {
+    if (!calledBind) {
+        calledBind = true;
+        Promise.prototype._propagateFrom = debug.propagateFromFunction();
+        Promise.prototype._boundValue = debug.boundValueFunction();
+    }
     var maybePromise = tryConvertToPromise(thisArg);
     var ret = new Promise(INTERNAL);
     ret._propagateFrom(this, PROPAGATE_CANCEL);
     var target = this._target();
-
     ret._setBoundTo(maybePromise);
     if (maybePromise instanceof Promise) {
         var context = {
@@ -33,9 +38,10 @@ Promise.prototype.bind = function (thisArg) {
             target: target,
             bindingPromise: maybePromise
         };
-        target._then(INTERNAL, targetRejected, ret._progress, ret, context);
+        target._then(INTERNAL, targetRejected, undefined, ret, context);
         maybePromise._then(
-            bindingResolved, bindingRejected, ret._progress, ret, context);
+            bindingResolved, bindingRejected, undefined, ret, context);
+        ret._setOnCancel(maybePromise);
     } else {
         ret._resolveCallback(target);
     }
@@ -56,17 +62,6 @@ Promise.prototype._isBound = function () {
 };
 
 Promise.bind = function (thisArg, value) {
-    var maybePromise = tryConvertToPromise(thisArg);
-    var ret = new Promise(INTERNAL);
-
-    ret._setBoundTo(maybePromise);
-    if (maybePromise instanceof Promise) {
-        maybePromise._then(function() {
-            ret._resolveCallback(value);
-        }, ret._reject, ret._progress, ret, null);
-    } else {
-        ret._resolveCallback(value);
-    }
-    return ret;
+    return Promise.resolve(value).bind(thisArg);
 };
 };

@@ -65,56 +65,6 @@ describe("regressions", function() {
         });
     });
 
-    specify("should have same order as if 2.3.2 was implemented as adoption", function() {
-        var order = [];
-        var resolveFollower;
-        var follower = new Promise(function() {
-            resolveFollower = arguments[0];
-        });
-
-        follower.then(function() {
-            order.push(1);
-        });
-
-        var resolveFollowee;
-        var followee = new Promise(function() {
-            resolveFollowee = arguments[0];
-        });
-
-        followee.then(function() {
-            order.push(2);
-        });
-
-        resolveFollower(followee);
-
-        followee.then(function() {
-            order.push(3);
-        });
-
-        resolveFollowee();
-
-        return follower.then(function() {
-            order.push(4);
-            assert.equal(order.join(","), "2,3,1,4");
-        });
-    });
-
-    specify("github-513", function() {
-        var order = [];
-        order.push(1);
-        var a = Promise.resolve([1]).each(function() {
-            order.push(4);
-        });
-        order.push(2);
-        var b = Promise.resolve([1]).map(function() {
-            order.push(5);
-        });
-        order.push(3);
-        return Promise.resolve().then(function() {
-            assert.deepEqual([1, 2, 3, 4, 5], order);
-        });
-    });
-
     specify("github-682", function() {
         var o = {
             then: function(f) {
@@ -179,7 +129,7 @@ describe("regressions", function() {
                     return Promise.delay(1);
                 }).then(function(val) {
                     assert.strictEqual(val, true);
-                    assert.strictEqual(bindCalls, 7);
+                    assert.strictEqual(bindCalls, 6);
                 });
             });
         });

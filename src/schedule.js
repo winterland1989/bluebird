@@ -1,6 +1,6 @@
 "use strict";
-var schedule;
 var util = require("./util");
+var schedule;
 var noAsyncScheduler = function() {
     throw new Error(NO_ASYNC_SCHEDULER);
 };

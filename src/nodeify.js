@@ -1,8 +1,8 @@
 "use strict";
 module.exports = function(Promise) {
-var util = require("./util.js");
-var async = require("./async.js");
-var ASSERT = require("./assert.js");
+var util = require("./util");
+var async = Promise._async;
+var ASSERT = require("./assert");
 var tryCatch = util.tryCatch;
 var errorObj = util.errorObj;
 
@@ -30,9 +30,7 @@ function successAdapter(val, nodeback) {
 function errorAdapter(reason, nodeback) {
     var promise = this;
     if (!reason) {
-        var target = promise._target();
-        ASSERT(target._isCarryingStackTrace());
-        var newReason = target._getCarriedStackTrace();
+        var newReason = new Error(reason + "");
         newReason.cause = reason;
         reason = newReason;
         ASSERT(!!reason);
@@ -44,8 +42,8 @@ function errorAdapter(reason, nodeback) {
     }
 }
 
-Promise.prototype.asCallback =
-Promise.prototype.nodeify = function (nodeback, options) {
+Promise.prototype.asCallback = Promise.prototype.nodeify = function (nodeback,
+                                                                     options) {
     if (typeof nodeback == "function") {
         var adapter = successAdapter;
         if (options !== undefined && Object(options).spread) {

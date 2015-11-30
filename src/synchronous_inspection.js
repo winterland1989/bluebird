@@ -1,99 +1,96 @@
 "use strict";
 module.exports = function(Promise) {
-var ASSERT = require("./assert.js");
 function PromiseInspection(promise) {
     if (promise !== undefined) {
         promise = promise._target();
         this._bitField = promise._bitField;
-        this._settledValue = promise._settledValue;
+        this._settledValueField = promise._isFateSealed()
+            ? promise._settledValue() : undefined;
     }
     else {
         this._bitField = 0;
-        this._settledValue = undefined;
+        this._settledValueField = undefined;
     }
 }
 
-PromiseInspection.prototype.value = function () {
+PromiseInspection.prototype._settledValue = function() {
+    return this._settledValueField;
+};
+
+var value = PromiseInspection.prototype.value = function () {
     if (!this.isFulfilled()) {
         throw new TypeError(INSPECTION_VALUE_ERROR);
     }
-    return this._settledValue;
+    return this._settledValue();
 };
 
-PromiseInspection.prototype.error =
+var reason = PromiseInspection.prototype.error =
 PromiseInspection.prototype.reason = function () {
     if (!this.isRejected()) {
         throw new TypeError(INSPECTION_REASON_ERROR);
     }
-    return this._settledValue;
+    return this._settledValue();
 };
 
-PromiseInspection.prototype.isFulfilled =
-Promise.prototype._isFulfilled = function () {
-    return (this._bitField & IS_FULFILLED) > 0;
+var isFulfilled = PromiseInspection.prototype.isFulfilled = function() {
+    return (this._bitField & IS_FULFILLED) !== 0;
 };
 
-PromiseInspection.prototype.isRejected =
-Promise.prototype._isRejected = function () {
-    return (this._bitField & IS_REJECTED) > 0;
+var isRejected = PromiseInspection.prototype.isRejected = function () {
+    return (this._bitField & IS_REJECTED) !== 0;
 };
 
-PromiseInspection.prototype.isPending =
-Promise.prototype._isPending = function () {
-    return (this._bitField & IS_REJECTED_OR_FULFILLED) === 0;
+var isPending = PromiseInspection.prototype.isPending = function () {
+    return (this._bitField & IS_REJECTED_OR_FULFILLED_OR_CANCELLED) === 0;
 };
 
-PromiseInspection.prototype.isResolved =
-Promise.prototype._isResolved = function () {
-    return (this._bitField & IS_REJECTED_OR_FULFILLED) > 0;
+var isResolved = PromiseInspection.prototype.isResolved = function () {
+    return (this._bitField & IS_REJECTED_OR_FULFILLED) !== 0;
+};
+
+PromiseInspection.prototype.isCancelled =
+Promise.prototype._isCancelled = function() {
+    return (this._bitField & IS_CANCELLED) === IS_CANCELLED;
+};
+
+Promise.prototype.isCancelled = function() {
+    return this._target()._isCancelled();
 };
 
 Promise.prototype.isPending = function() {
-    return this._target()._isPending();
+    return isPending.call(this._target());
 };
 
 Promise.prototype.isRejected = function() {
-    return this._target()._isRejected();
+    return isRejected.call(this._target());
 };
 
 Promise.prototype.isFulfilled = function() {
-    return this._target()._isFulfilled();
+    return isFulfilled.call(this._target());
 };
 
 Promise.prototype.isResolved = function() {
-    return this._target()._isResolved();
-};
-
-Promise.prototype._value = function() {
-    ASSERT(!this._isFollowing());
-    ASSERT(this._isFulfilled());
-    return this._settledValue;
-};
-
-Promise.prototype._reason = function() {
-    ASSERT(!this._isFollowing());
-    ASSERT(this._isRejected());
-    this._unsetRejectionIsUnhandled();
-    return this._settledValue;
+    return isResolved.call(this._target());
 };
 
 Promise.prototype.value = function() {
-    var target = this._target();
-    if (!target.isFulfilled()) {
-        throw new TypeError(INSPECTION_VALUE_ERROR);
-    }
-    return target._settledValue;
+    return value.call(this._target());
 };
 
 Promise.prototype.reason = function() {
     var target = this._target();
-    if (!target.isRejected()) {
-        throw new TypeError(INSPECTION_REASON_ERROR);
-    }
     target._unsetRejectionIsUnhandled();
-    return target._settledValue;
+    return reason.call(target);
 };
 
+Promise.prototype._value = function() {
+    return this._settledValue();
+};
+
+Promise.prototype._reason = function() {
+    this._unsetRejectionIsUnhandled();
+    return this._settledValue();
+};
 
 Promise.PromiseInspection = PromiseInspection;
 };

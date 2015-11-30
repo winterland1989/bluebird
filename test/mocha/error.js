@@ -4,29 +4,6 @@ var testUtils = require("./helpers/util.js");
 
 describe("Promise.prototype.error", function(){
     describe("catches stuff originating from explicit rejections", function() {
-        specify("using constructor", function() {
-            var e = new Error("sup");
-            return new Promise(function(resolve, reject) {
-                reject(e);
-            }).error(function(err){
-                assert(err === e);
-            });
-        });
-        specify("using Promise.reject", function() {
-            var e = new Error("sup");
-            return Promise.reject(e).error(function(err) {
-                assert(err === e);
-            });
-        });
-        specify("using deferred", function() {
-            var e = new Error("sup");
-            var d = Promise.defer();
-            d.promise.error(function(err) {
-                assert(err === e);
-            });
-            d.reject(e);
-        });
-
         specify("using callback", function() {
             var e = new Promise.TypeError("sup");
             function callsback(a, b, c, fn) {
@@ -79,41 +56,28 @@ describe("Promise.prototype.error", function(){
             });
         });
     });
-
-    specify("gh-54-1", function() {
-        function doThing(arg) {
-          return new Promise(function (resolve, rej) {
-            if (typeof arg !== "string") return rej(new Error("invalid thing"));
-          });
-        }
-
-        return doThing().error(function() {
-
-        }).caught(function(){
-            assert.fail();
-        });
-
-    });
-
-    specify("gh-54-2", function() {
-        function doBuggyThing(arg) {
-          return new Promise(function (resolve, rej) {
-            // arg2 & reject dont exist. this is buggy.
-            if (arg2 && typeof arg2 !== "string") return Promise.reject(new Error("invalid thing"));
-          });
-        }
-        var called = false;
-
-        setTimeout(function(){
-            assert(!called);
-        }, 1);
-        return doBuggyThing().error(function(){
-            called = true;
-        }).then(assert.fail, function() {
-
-        });
-    });
 })
+
+if (testUtils.ecmaScript5) {
+    describe("Weird errors", function() {
+        specify("unwritable stack", function() {
+            var e = new Error();
+            var stack = e.stack;
+            Object.defineProperty(e, "stack", {
+                configurable: true,
+                get: function() {return stack;},
+                set: function() {throw new Error("cannot set");}
+            });
+            return new Promise(function(_, reject) {
+                setTimeout(function() {
+                    reject(e);
+                }, 1);
+            }).caught(function(err) {
+                assert.equal(e, err);
+            });
+        });
+    });
+}
 
 if (testUtils.ecmaScript5) {
     describe("Weird errors", function() {

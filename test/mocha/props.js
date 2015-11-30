@@ -168,38 +168,6 @@ describe("Promise.props", function () {
         });
     });
 
-    specify("sends { key, value } progress updates", function() {
-        var deferred1 = Promise.defer();
-        var deferred2 = Promise.defer();
-
-        var progressValues = [];
-
-        Promise.delay(1).then(function () {
-            deferred1.progress("a");
-        }).delay(1).then(function () {
-            deferred2.progress("b");
-            deferred2.resolve();
-        }).delay(1).then(function () {
-            deferred1.progress("c");
-            deferred1.resolve();
-        });
-
-        return Promise.props({
-            one: deferred1.promise,
-            two: deferred2.promise
-        }).then(function () {
-            assert.deepEqual(progressValues, [
-                { key: "one", value: "a" },
-                { key: "two", value: "b" },
-                { key: "one", value: "c" }
-            ]);
-        },
-        undefined,
-        function (progressValue) {
-            progressValues.push(progressValue);
-        });
-    });
-
     specify("treats arrays for their properties", function() {
         var o = [1,2,3];
 
@@ -211,5 +179,35 @@ describe("Promise.props", function () {
             }, v);
         });
     });
+
+    if (typeof Map !== "undefined") {
+        specify("works with es6 maps", function() {
+            return Promise.props(new Map([
+                ["a", Promise.resolve(1)],
+                ["b", Promise.resolve(2)],
+                ["c", Promise.resolve(3)]
+            ])).then(function(result) {
+                assert.strictEqual(result.get("a"), 1);
+                assert.strictEqual(result.get("b"), 2);
+                assert.strictEqual(result.get("c"), 3);
+            });
+        });
+
+        specify("doesn't await promise keys in es6 maps", function() {
+            var a = new Promise(function() {});
+            var b = new Promise(function() {});
+            var c = new Promise(function() {});
+
+            return Promise.props(new Map([
+                [a, Promise.resolve(1)],
+                [b, Promise.resolve(2)],
+                [c, Promise.resolve(3)]
+            ])).then(function(result) {
+                assert.strictEqual(result.get(a), 1);
+                assert.strictEqual(result.get(b), 2);
+                assert.strictEqual(result.get(c), 3);
+            });
+        });
+    }
 
 });

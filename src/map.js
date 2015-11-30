@@ -3,14 +3,13 @@ module.exports = function(Promise,
                           PromiseArray,
                           apiRejection,
                           tryConvertToPromise,
-                          INTERNAL) {
+                          INTERNAL,
+                          debug) {
+var ASSERT = require("./assert");
 var getDomain = Promise._getDomain;
-var ASSERT = require("./assert.js");
-var async = require("./async.js");
-var util = require("./util.js");
+var util = require("./util");
 var tryCatch = util.tryCatch;
 var errorObj = util.errorObj;
-var PENDING = {};
 var EMPTY_ARRAY = [];
 
 function MappingPromiseArray(promises, fn, limit, _filter) {
@@ -46,43 +45,64 @@ MappingPromiseArray.prototype._promiseFulfilled = function (value, index) {
     var length = this.length();
     var preservedValues = this._preservedValues;
     var limit = this._limit;
-    if (values[index] === PENDING) {
+
+    // Callback has been called for this index if it's negative
+    if (index < 0) {
+        // Restore the actual index value
+        index = (index * -1) - 1;
         values[index] = value;
         if (limit >= 1) {
             this._inFlight--;
             this._drainQueue();
-            if (this._isResolved()) return;
+            if (this._isResolved()) return true;
         }
     } else {
         if (limit >= 1 && this._inFlight >= limit) {
             values[index] = value;
             this._queue.push(index);
-            return;
+            return false;
         }
         if (preservedValues !== null) preservedValues[index] = value;
 
+        var promise = this._promise;
         var callback = this._callback;
-        var receiver = this._promise._boundValue();
-        this._promise._pushContext();
+        var receiver = promise._boundValue();
+        promise._pushContext();
         var ret = tryCatch(callback).call(receiver, value, index, length);
-        this._promise._popContext();
-        if (ret === errorObj) return this._reject(ret.e);
+        var promiseCreated = promise._popContext();
+        debug.checkForgottenReturns(
+            ret,
+            promiseCreated,
+            preservedValues !== null ? "Promise.filter" : "Promise.map",
+            promise
+        );
+        if (ret === errorObj) {
+            this._reject(ret.e);
+            return true;
+        }
 
         // If the mapper function returned a promise we simply reuse
         // The MappingPromiseArray as a PromiseArray for round 2.
-        // To mark an index as "round 2" (where the callback must not be called
-        // anymore), the marker PENDING is put at that index
+        // To mark an index as "round 2" its inverted by adding +1 and
+        // multiplying by -1
         var maybePromise = tryConvertToPromise(ret, this._promise);
         if (maybePromise instanceof Promise) {
             maybePromise = maybePromise._target();
-            if (maybePromise._isPending()) {
+            var bitField = maybePromise._bitField;
+            USE(bitField);
+            if (BIT_FIELD_CHECK(IS_PENDING_AND_WAITING_NEG)) {
                 if (limit >= 1) this._inFlight++;
-                values[index] = PENDING;
-                return maybePromise._proxyPromiseArray(this, index);
-            } else if (maybePromise._isFulfilled()) {
+                values[index] = maybePromise;
+                maybePromise._proxy(this, (index + 1) * -1);
+                return false;
+            } else if (BIT_FIELD_CHECK(IS_FULFILLED)) {
                 ret = maybePromise._value();
+            } else if (BIT_FIELD_CHECK(IS_REJECTED)) {
+                this._reject(maybePromise._reason());
+                return true;
             } else {
-                return this._reject(maybePromise._reason());
+                this._cancel();
+                return true;
             }
         }
         values[index] = ret;
@@ -94,8 +114,9 @@ MappingPromiseArray.prototype._promiseFulfilled = function (value, index) {
         } else {
             this._resolve(values);
         }
-
+        return true;
     }
+    return false;
 };
 
 MappingPromiseArray.prototype._drainQueue = function () {
@@ -125,23 +146,23 @@ MappingPromiseArray.prototype.preservedValues = function () {
 };
 
 function map(promises, fn, options, _filter) {
+    if (typeof fn !== "function") {
+        return apiRejection(FUNCTION_ERROR + util.classString(fn));
+    }
     var limit = typeof options === "object" && options !== null
         ? options.concurrency
         : 0;
     limit = typeof limit === "number" &&
         isFinite(limit) && limit >= 1 ? limit : 0;
-    return new MappingPromiseArray(promises, fn, limit, _filter);
+    return new MappingPromiseArray(promises, fn, limit, _filter).promise();
 }
 
 Promise.prototype.map = function (fn, options) {
-    if (typeof fn !== "function") return apiRejection(NOT_FUNCTION_ERROR);
-
-    return map(this, fn, options, null).promise();
+    return map(this, fn, options, null);
 };
 
 Promise.map = function (promises, fn, options, _filter) {
-    if (typeof fn !== "function") return apiRejection(NOT_FUNCTION_ERROR);
-    return map(promises, fn, options, _filter).promise();
+    return map(promises, fn, options, _filter);
 };
 
 

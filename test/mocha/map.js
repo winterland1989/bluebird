@@ -35,7 +35,7 @@ describe("Promise.map-test", function () {
     }
 
     function deferredMapper(val) {
-        return Promise.delay(mapper(val), 1);
+        return Promise.delay(1, mapper(val));
     }
 
     specify("should map input values array", function() {
@@ -111,45 +111,6 @@ describe("Promise.map-test", function () {
             }
         );
     });
-
-    specify("should propagate progress 2", function() {
-         // Thanks @depeele for this test
-        var input, ncall;
-
-        input = [_resolver(1), _resolver(2), _resolver(3)];
-        ncall = 0;
-
-        function identity(x) {
-            return x;
-        }
-
-        return Promise.map(input, identity).then(function () {
-            assert(ncall === 6);
-        }, assert.fail, function () {
-            ncall++;
-        });
-
-        function _resolver(id) {
-          var p = Promise.defer();
-
-          setTimeout(function () {
-            var loop, timer;
-
-            loop = 0;
-            timer = setInterval(function () {
-              p.progress(id);
-              loop++;
-              if (loop === 2) {
-                clearInterval(timer);
-                p.resolve(id);
-              }
-            }, 1);
-          }, 1);
-
-          return p.promise;
-        }
-
-    });
 });
 
 describe("Promise.map-test with concurrency", function () {
@@ -161,7 +122,7 @@ describe("Promise.map-test with concurrency", function () {
     }
 
     function deferredMapper(val) {
-        return Promise.delay(mapper(val), 1);
+        return Promise.delay(1, mapper(val));
     }
 
     specify("should map input values array with concurrency", function() {
@@ -238,45 +199,6 @@ describe("Promise.map-test with concurrency", function () {
         );
     });
 
-    specify("should propagate progress 2 with concurrency", function() {
-         // Thanks @depeele for this test
-        var input, ncall;
-
-        input = [_resolver(1), _resolver(2), _resolver(3)];
-        ncall = 0;
-
-        function identity(x) {
-            return x;
-        }
-        return Promise.map(input, identity, concurrency).then(function () {
-            assert(ncall === 6);
-        }, assert.fail, function () {
-            ncall++;
-        });
-
-        function _resolver(id) {
-          var p = Promise.defer();
-
-          setTimeout(function () {
-            var loop, timer;
-
-            loop = 0;
-            timer = setInterval(function () {
-              p.progress(id);
-              loop++;
-              if (loop === 2) {
-                clearInterval(timer);
-                p.resolve(id);
-              }
-            }, 1);
-          }, 1);
-
-          return p.promise;
-        }
-
-    });
-
-
     specify("should not have more than {concurrency} promises in flight", function() {
         var array = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
         var b = [];
@@ -313,14 +235,14 @@ describe("Promise.map-test with concurrency", function () {
             });
         }, {concurrency: 5});
 
-        var ret2 = Promise.delay(1).then(function() {
+        var ret2 = Promise.delay(100).then(function() {
             assert.strictEqual(0, b.length);
             immediates.forEach(resolve);
             return immediates.map(function(item){return item[0]});
-        }).delay(1).then(function() {
+        }).delay(100).then(function() {
             assert.deepEqual(b, [0, 1, 2, 3, 4]);
             lates.forEach(resolve);
-        }).delay(1).then(function() {
+        }).delay(100).then(function() {
             assert.deepEqual(b, [0, 1, 2, 3, 4, 10, 9, 8, 7, 6 ]);
             lates.forEach(resolve);
         }).thenReturn(ret1).then(function() {

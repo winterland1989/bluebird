@@ -1,3 +1,11 @@
+adapter.defer = adapter.pending = function() {
+    var ret = {};
+    ret.promise = new Promise(function(resolve, reject) {
+        ret.resolve = ret.fulfill = resolve;
+        ret.reject = reject;
+    });
+    return ret;
+};
 (function() {
     var currentTime = 0;
     var timers = {};
@@ -68,7 +76,7 @@ global.Promise = global.adapter = window.adapter;
 window.assert = require("assert");
 
 var prev = window.assert.deepEqual;
-window.assert.deepEqual = function(a, b) {
+var areDeepEqual = function(a, b) {
     if (Array.isArray(a) &&
         Array.isArray(b)) {
         if (a.length === b.length) {
@@ -81,7 +89,13 @@ window.assert.deepEqual = function(a, b) {
         }
         return false;
     } else {
-        return prev.call(window.assert, a, b);
+        prev.call(window.assert, a, b);
+        return true;
+    }
+};
+window.assert.deepEqual = function(a, b) {
+    if (!areDeepEqual(a, b)) {
+        throw new Error("a not equal to b");
     }
 };
 

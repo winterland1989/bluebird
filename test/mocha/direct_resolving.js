@@ -169,6 +169,61 @@ describe("thenThrow", function () {
     });
 });
 
+describe("catchReturn", function () {
+
+    specify("catches and returns", function() {
+        return Promise.reject(3).catchReturn(1).then(function(val) {
+            assert.strictEqual(1, val);
+        });
+    });
+
+    specify("doesn't catch succesful promise", function() {
+        return Promise.resolve(3).catchReturn(1).then(function(val) {
+            assert.strictEqual(3, val);
+        });
+    });
+
+    specify("supports 1 error type", function() {
+        var e = new Error();
+        e.prop = 3;
+        var predicate = function(e) {return e.prop === 3};
+        return Promise.reject(e)
+                .catchReturn(TypeError, 1)
+                .catchReturn(predicate, 2)
+                .then(function(val) {
+            assert.strictEqual(2, val);
+        });
+    });
+});
+
+describe("catchThrow", function () {
+
+    specify("catches and throws", function() {
+        return Promise.reject(3).catchThrow(1).then(assert.fail, function(val) {
+            assert.strictEqual(1, val);
+        });
+    });
+
+    specify("doesn't catch succesful promise", function() {
+        return Promise.resolve(3).catchThrow(1).then(function(val) {
+            assert.strictEqual(3, val);
+        });
+    });
+
+    specify("supports 1 error type", function() {
+        var e = new Error();
+        e.prop = 3;
+        var predicate = function(e) {return e.prop === 3};
+        return Promise.reject(e)
+                .catchThrow(TypeError, 1)
+                .catchThrow(predicate, 2)
+                .then(assert.fail, function(val) {
+            assert.strictEqual(2, val);
+        });
+    });
+});
+
+
 describe("gh-627", function() {
     it("can return undefined", function() {
         return Promise.bind(42)
@@ -180,6 +235,21 @@ describe("gh-627", function() {
     it("can throw undefined", function() {
         return Promise.bind(42)
             .thenThrow(undefined)
+            .then(assert.fail, function (reason) {
+              assert.strictEqual(reason, undefined);
+            });
+    });
+
+    it("can catch return undefined", function() {
+        return Promise.bind(42).thenThrow(new Error())
+            .catchReturn()
+            .then(function (value) {
+              assert.strictEqual(value, undefined);
+            });
+    });
+    it("can catch throw undefined", function() {
+        return Promise.bind(42).thenThrow(new Error())
+            .catchThrow()
             .then(assert.fail, function (reason) {
               assert.strictEqual(reason, undefined);
             });

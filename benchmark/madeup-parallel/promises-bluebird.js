@@ -1,6 +1,6 @@
 global.useBluebird = true;
 global.useQ = false;
-var Promise = require('../../js/main/bluebird.js');
+var Promise = require('../../js/release/bluebird.js');
 require('../lib/fakesP');
 
 module.exports = function upload(stream, idOrPath, tag, done) {
@@ -11,7 +11,7 @@ module.exports = function upload(stream, idOrPath, tag, done) {
         queries[i] = FileVersion.insert({index: i}).execWithin(tx);
     }
 
-    Promise.all(queries).then().then(function() {
+    Promise.all(queries).then(function() {
         tx.commit();
         done();
     }, function(err) {

@@ -172,13 +172,55 @@ Assertion.prototype.toString = function() {
     return 'ASSERT('+nodeToString(this.expr)+',\n    '+this.exprStr+')';
 };
 
-function InlineSlice(varExpr, collectionExpression, startExpression, endExpression, start, end) {
+function BitFieldRead(mask, start, end, fieldExpr) {
+    if (mask === 0) throw new Error("mask cannot be zero");
+    this.mask = mask;
+    this.start = start;
+    this.end = end;
+    this.fieldExpr = fieldExpr;
+}
+
+BitFieldRead.prototype.getShiftCount = function() {
+    var b = 1;
+    var shiftCount = 0;
+    while ((this.mask & b) === 0) {
+        b <<= 1;
+        shiftCount++;
+    }
+    return shiftCount;
+};
+
+BitFieldRead.prototype.toString = function() {
+    var fieldExpr = this.fieldExpr ? nodeToString(this.fieldExpr) : "bitField";
+    var mask = this.mask;
+    var shiftCount = this.getShiftCount();
+    return shiftCount === 0
+        ? "(" + fieldExpr + " & " + mask + ")"
+        : "((" + fieldExpr + " & " + mask + ") >>> " + shiftCount + ")";
+};
+
+function BitFieldCheck(value, inverted, start, end, fieldExpr) {
+    this.value = value;
+    this.inverted = inverted;
+    this.start = start;
+    this.end = end;
+    this.fieldExpr = fieldExpr;
+}
+
+BitFieldCheck.prototype.toString = function() {
+    var fieldExpr = this.fieldExpr ? nodeToString(this.fieldExpr) : "bitField";
+    var equality = this.inverted ? "===" : "!==";
+    return "((" + fieldExpr + " & " + this.value + ") " + equality + " 0)";
+};
+
+function InlineSlice(varExpr, collectionExpression, startExpression, endExpression, start, end, isBrowser) {
     this.varExpr = varExpr;
     this.collectionExpression = collectionExpression;
     this.startExpression = startExpression;
     this.endExpression = endExpression;
     this.start = start;
     this.end = end;
+    this.isBrowser = isBrowser;
 }
 
 InlineSlice.prototype.hasSimpleStartExpression =
@@ -213,10 +255,15 @@ InlineSlice.prototype.toString = function InlineSlice$toString() {
 
     //No offset arguments at all
     if( this.startExpression === firstElement ) {
+        if (this.isBrowser) {
+            return "var " + varExpr + " = [].slice.call("+collectionExpression+");";
+        } else {
             return init + "var " + varExpr + " = new Array($_len); " +
             "for(var $_i = 0; $_i < $_len; ++$_i) {" +
                     varExpr + "[$_i] = " + collectionExpression + "[$_i];" +
             "}";
+        }
+
     }
     else {
         if( !this.hasSimpleStartExpression() ) {
@@ -228,11 +275,15 @@ InlineSlice.prototype.toString = function InlineSlice$toString() {
 
             //Start offset argument given
         if( this.endExpression === lastElement ) {
-            return init + "var " + varExpr + " = new Array($_len - " +
-             startExpression + "); " +
-            "for(var $_i = " + startExpression + "; $_i < $_len; ++$_i) {" +
-                    varExpr + "[$_i - "+startExpression+"] = " + collectionExpression + "[$_i];" +
-            "}";
+            if (this.isBrowser) {
+                return "var " + varExpr + " = [].slice.call("+collectionExpression+", "+startExpression+");";
+            } else {
+                return init + "var " + varExpr + " = new Array($_len - " +
+                 startExpression + "); " +
+                "for(var $_i = " + startExpression + "; $_i < $_len; ++$_i) {" +
+                        varExpr + "[$_i - "+startExpression+"] = " + collectionExpression + "[$_i];" +
+                "}";
+            }
         }
             //Start and end offset argument given
         else {
@@ -244,11 +295,16 @@ InlineSlice.prototype.toString = function InlineSlice$toString() {
                 ? nodeToString(this.endExpression)
                 : "$_end";
 
-            return init + "var " + varExpr + " = new Array(" + endExpression + " - " +
-             startExpression + "); " +
-            "for(var $_i = " + startExpression + "; $_i < " + endExpression + "; ++$_i) {" +
-                    varExpr + "[$_i - "+startExpression+"] = " + collectionExpression + "[$_i];" +
-            "}";
+            if (this.isBrowser) {
+                return "var " + varExpr + " = [].slice.call("+collectionExpression+", "+startExpression+", "+endExpression+");";
+            } else {
+                return init + "var " + varExpr + " = new Array(" + endExpression + " - " +
+                 startExpression + "); " +
+                "for(var $_i = " + startExpression + "; $_i < " + endExpression + "; ++$_i) {" +
+                        varExpr + "[$_i - "+startExpression+"] = " + collectionExpression + "[$_i];" +
+                "}";
+            }
+
         }
 
     }
@@ -329,7 +385,7 @@ var inlinedFunctions = Object.create(null);
 
 var lastElement = jsp.parse("___input.length").body[0].expression;
 var firstElement = jsp.parse("0").body[0].expression;
-inlinedFunctions.INLINE_SLICE = function( node ) {
+inlinedFunctions.INLINE_SLICE = function( node, isBrowser ) {
     var statement = node;
     node = node.expression;
     var args = node.arguments;
@@ -347,38 +403,90 @@ inlinedFunctions.INLINE_SLICE = function( node ) {
         ? lastElement
         : args[3];
     return new InlineSlice(varExpression, collectionExpression,
-        startExpression, endExpression, statement.start, statement.end);
+        startExpression, endExpression, statement.start, statement.end, isBrowser);
+};
+inlinedFunctions.BIT_FIELD_READ = function(node) {
+    var statement = node;
+    var args = node.expression.arguments;
+    if (args.length !== 1 && args.length !== 2) {
+        throw new Error("BIT_FIELD must have 1 or 2 arguments");
+    }
+    var arg = args[0];
+    if (arg.type !== "Identifier") {
+        throw new Error("BIT_FIELD argument must be an identifier");
+    }
+    var name = arg.name;
+    var constant = constants[name];
+    if (constant === undefined) {
+        throw new Error(name + " is not a constant");
+    }
+    var value = constant.value;
+    return new BitFieldRead(value, statement.start, statement.end, args[1]);
+};
+inlinedFunctions.BIT_FIELD_CHECK = function(node) {
+    var statement = node;
+    var args = node.expression.arguments;
+    if (args.length !== 1 && args.length !== 2) {
+        throw new Error("BIT_FIELD must have 1 or 2 arguments");
+    }
+    var arg = args[0];
+    if (arg.type !== "Identifier") {
+        throw new Error("BIT_FIELD argument must be an identifier");
+    }
+    var name = arg.name;
+    var constant = constants[name];
+    if (constant === undefined) {
+        throw new Error(name + " is not a constant");
+    }
+    var value = constant.value;
+    var inverted = false;
+    if (name.slice(-4) === "_NEG") {
+        inverted = true;
+    }
+    return new BitFieldCheck(value, inverted, statement.start, statement.end, args[1]);
+};
+inlinedFunctions.USE = function(node) {
+    return new Empty(node.start, node.end);
 };
 
 var constants = {};
 var ignore = [];
-
+Error.stackTraceLimit = 10000;
 var astPasses = module.exports = {
 
-    inlineExpansion: function( src, fileName ) {
+    inlineExpansion: function( src, fileName, isBrowser ) {
         var ast = parse(src, fileName);
         var results = [];
+        var expr = [];
+        function doInline(node) {
+            if( node.expression.type !== 'CallExpression' ) {
+                return;
+            }
+
+            var name = node.expression.callee.name;
+
+            if(typeof inlinedFunctions[ name ] === "function" &&
+                expr.indexOf(node.expression) === -1) {
+                expr.push(node.expression);
+                try {
+                    results.push( inlinedFunctions[ name ]( node, isBrowser ) );
+                }
+                catch(e) {
+                    e.fileName = fileName;
+                    throw e;
+                }
+
+            }
+        }
         walk.simple(ast, {
-            ExpressionStatement: function( node ) {
-                if( node.expression.type !== 'CallExpression' ) {
-                    return;
-                }
-
-                var name = node.expression.callee.name;
-
-                if( typeof inlinedFunctions[ name ] === "function" ) {
-                    try {
-                        results.push( inlinedFunctions[ name ]( node ) );
-                    }
-                    catch(e) {
-                        e.fileName = fileName;
-                        throw e;
-                    }
-
-                }
+            ExpressionStatement: doInline,
+            CallExpression: function(node) {
+                node.expression = node;
+                doInline(node);
             }
         });
-        return convertSrc( src, results );
+        var ret = convertSrc( src, results );
+        return ret;
     },
 
     //Parse constants in from constants.js

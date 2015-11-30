@@ -1,65 +1,46 @@
 "use strict";
-var util = require("./util.js");
-var ASSERT = require("./assert.js");
-var isPrimitive = util.isPrimitive;
-
 module.exports = function(Promise) {
-var returner = function () {
-    return this;
-};
-var thrower = function () {
-    throw this;
-};
-var returnUndefined = function() {};
-var throwUndefined = function() {
-    throw undefined;
-};
-
-var wrapper = function (value, action) {
-    if (action === THROW) {
-        return function () {
-            throw value;
-        };
-    } else if (action === RETURN) {
-        return function () {
-            return value;
-        };
-    }
-    ASSERT(false);
-};
-
+function returner() {
+    return this.value;
+}
+function thrower() {
+    throw this.reason;
+}
 
 Promise.prototype["return"] =
 Promise.prototype.thenReturn = function (value) {
-    if (value === undefined) return this.then(returnUndefined);
-
-    if (isPrimitive(value)) {
-        return this._then(
-            wrapper(value, RETURN),
-            undefined,
-            undefined,
-            undefined,
-            undefined
-       );
-    } else if (value instanceof Promise) {
-        value._ignoreRejections();
-    }
-    return this._then(returner, undefined, undefined, value, undefined);
+    if (value instanceof Promise) value.suppressUnhandledRejections();
+    return this._then(
+        returner, undefined, undefined, {value: value}, undefined);
 };
 
 Promise.prototype["throw"] =
 Promise.prototype.thenThrow = function (reason) {
-    if (reason === undefined) return this.then(throwUndefined);
+    return this._then(
+        thrower, undefined, undefined, {reason: reason}, undefined);
+};
 
-    if (isPrimitive(reason)) {
+Promise.prototype.catchThrow = function (reason) {
+    if (arguments.length <= 1) {
         return this._then(
-            wrapper(reason, THROW),
-            undefined,
-            undefined,
-            undefined,
-            undefined
-       );
+            undefined, thrower, undefined, {reason: reason}, undefined);
+    } else {
+        var _reason = arguments[1];
+        var handler = function() {throw _reason;};
+        return this.caught(reason, handler);
     }
-    return this._then(thrower, undefined, undefined, reason, undefined);
+};
+
+Promise.prototype.catchReturn = function (value) {
+    if (arguments.length <= 1) {
+        if (value instanceof Promise) value.suppressUnhandledRejections();
+        return this._then(
+            undefined, returner, undefined, {value: value}, undefined);
+    } else {
+        var _value = arguments[1];
+        if (_value instanceof Promise) _value.suppressUnhandledRejections();
+        var handler = function() {return _value;};
+        return this.caught(value, handler);
+    }
 };
 };

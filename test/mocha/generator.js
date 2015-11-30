@@ -3,6 +3,7 @@
 var assert = require("assert");
 var testUtils = require("./helpers/util.js");
 var assertLongTrace = require("./helpers/assert_long_trace.js");
+var awaitLateQueue = testUtils.awaitLateQueue;
 
 function get(arg) {
     return {
@@ -29,7 +30,6 @@ var error = new Error("asd");
 describe("yielding", function() {
 
     specify("non-promise should throw", function() {
-
         return Promise.coroutine(function*(){
 
             var a = yield {};
@@ -358,9 +358,11 @@ describe("custom yield handlers", function() {
             promise = null;
         });
         return function() {
-          var def = Promise.defer();
-          promise = def.promise;
-          return def.callback;
+          var cb;
+          promise = Promise.fromNode(function(callback) {
+            cb = callback;
+          });
+          return cb;
         };
     })();
 
@@ -383,9 +385,12 @@ describe("custom yield handlers", function() {
 
     Promise.coroutine.addYieldHandler(function(v) {
         if (typeof v === "function") {
-            var def = Promise.defer();
-            try { v(def.callback); } catch (e) { def.reject(e); }
-            return def.promise;
+            var cb;
+            var promise = Promise.fromNode(function(callback) {
+                cb = callback;
+            });
+            try { v(cb); } catch (e) { cb(e); }
+            return promise;
         }
     });
 
@@ -478,3 +483,197 @@ if (Promise.hasLongStackTraces()) {
         });
     });
 }
+
+describe("Cancellation with generators", function() {
+    specify("input immediately cancelled", function() {
+        var cancelled = 0;
+        var finalled = 0;
+        var unreached = 0;
+
+        var p = new Promise(function(_, __, onCancel) {});
+        p.cancel();
+
+        var asyncFunction = Promise.coroutine(function* () {
+            try {
+                yield p;
+                unreached++;
+            } catch(e) {
+                if (e === Promise.coroutine.returnSentinel) throw e;
+                unreached++;
+            } finally {
+                finalled++;
+            }
+            unreached++;
+        });
+
+        var resolve, reject;
+        var result = new Promise(function() {
+            resolve = arguments[0];
+            reject = arguments[1];
+        });
+
+        asyncFunction()
+            .then(reject, function(e) {
+                if(!(e instanceof Promise.CancellationError)) reject(new Error());
+            })
+            .lastly(function() {
+                finalled++;
+                resolve();
+            });
+
+        return result.then(function() {
+            return awaitLateQueue(function() {
+                assert.equal(2, finalled);
+                assert.equal(0, cancelled);
+                assert.equal(0, unreached);
+            });
+        });
+    });
+
+    specify("input eventually cancelled", function() {
+        var cancelled = 0;
+        var finalled = 0;
+        var unreached = 0;
+
+        var p = new Promise(function(_, __, onCancel) {});
+        var asyncFunction = Promise.coroutine(function* () {
+            try {
+                yield p;
+                unreached++;
+            } catch(e) {
+                if (e === Promise.coroutine.returnSentinel) throw e;
+                unreached++;
+            } finally {
+                finalled++;
+            }
+            unreached++;
+        });
+
+        var resolve, reject;
+        var result = new Promise(function() {
+            resolve = arguments[0];
+            reject = arguments[1];
+        });
+
+        asyncFunction()
+            .then(reject, reject)
+            .lastly(function() {
+                finalled++;
+                resolve();
+            });
+
+        Promise.delay(1).then(function() {
+            p.cancel();
+        });
+
+        return result.then(function() {
+            return awaitLateQueue(function() {
+                assert.equal(2, finalled);
+                assert.equal(0, cancelled);
+                assert.equal(0, unreached);
+            });
+        });
+    });
+
+    specify("output immediately cancelled", function() {
+        var cancelled = 0;
+        var finalled = 0;
+        var unreached = 0;
+
+        var p = new Promise(function(_, __, onCancel) {
+            onCancel(function() {
+                cancelled++;
+            });
+        }).lastly(function() {
+            finalled++;
+        });
+
+        var asyncFunction = Promise.coroutine(function* () {
+            try {
+                yield p;
+                unreached++;
+            } catch(e) {
+                if (e === Promise.coroutine.returnSentinel) throw e;
+                unreached++;
+            } finally {
+                finalled++;
+            }
+            unreached++;
+        });
+
+        var resolve, reject;
+        var result = new Promise(function() {
+            resolve = arguments[0];
+            reject = arguments[1];
+        });
+
+        var output = asyncFunction()
+            .then(reject, reject)
+            .lastly(function() {
+                finalled++;
+                resolve();
+            });
+
+        output.cancel();
+
+        return result.then(function() {
+            return awaitLateQueue(function() {
+                assert.equal(3, finalled);
+                assert.equal(1, cancelled);
+                assert.equal(0, unreached);
+            });
+        });
+    });
+
+    specify("output eventually cancelled", function() {
+        var cancelled = 0;
+        var finalled = 0;
+        var unreached = 0;
+
+        var p = new Promise(function(_, __, onCancel) {
+            onCancel(function() {
+                cancelled++;
+            });
+        }).lastly(function() {
+            finalled++;
+        });
+
+        var asyncFunction = Promise.coroutine(function* () {
+            try {
+                yield p;
+                unreached++;
+            } catch(e) {
+                if (e === Promise.coroutine.returnSentinel) throw e;
+                unreached++;
+            } finally {
+                finalled++;
+            }
+            unreached++;
+        });
+
+        var resolve, reject;
+        var result = new Promise(function() {
+            resolve = arguments[0];
+            reject = arguments[1];
+        });
+
+        var output = asyncFunction()
+            .then(reject, reject)
+            .lastly(function() {
+                finalled++;
+                resolve();
+            });
+
+        Promise.delay(1).then(function() {
+            output.cancel();
+        });
+
+        return result.then(function() {
+            return awaitLateQueue(function() {
+                assert.equal(3, finalled);
+                assert.equal(1, cancelled);
+                assert.equal(0, unreached);
+            });
+        });
+    });
+});

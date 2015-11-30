@@ -1,34 +1,89 @@
 var assert = require("assert");
 var token = {};
 module.exports = {
-    awaitGlobalException: function(fn, done) {
-        if (typeof process !== "undefined" && typeof process.version === "string") {
-            return new Promise(function(resolve, reject) {
-                var listeners = process.listeners("uncaughtException");
+    awaitGlobalException: function(fn) {
+        function replaceListeners(by) {
+            var single = typeof by === "function";
+            if (process.title === "browser") {
+                var original = window.onerror;
+                window.onerror = single ? function(message, file, line, column, e) {
+                    return by(e);
+                } : by[0];
+                return [original];
+            } else {
+                var original = process.listeners("uncaughtException");
                 process.removeAllListeners("uncaughtException");
-                process.on("uncaughtException", function(e) {
-                    var err;
-                    var ret;
-                    try {
-                        ret = fn(e);
-                    } catch (e) {
-                        err = e;
-                    }
-                    if (!err && ret === false) return;
-                    process.removeAllListeners("uncaughtException");
-                    listeners.forEach(function(listener) {
-                        process.on("uncaughtException", listener);
-                    });
-
-                    Promise.delay(1).then(function() {
-                        if (err) reject(err);
-                        resolve();
-                    });
+                if (single) by = [by];
+                by.forEach(function(listener) {
+                    process.on("uncaughtException", listener);
                 });
+                return original;
+            }
+        }
+        return new Promise(function(resolve, reject) {
+            var listeners = replaceListeners(function(e) {
+                var err;
+                var ret;
+                try {
+                    ret = fn(e);
+                } catch (e) {
+                    err = e;
+                }
+                if (!err && ret === false) return;
+                replaceListeners(listeners);
+                Promise.delay(1).then(function() {
+                    if (err) reject(err);
+                    resolve();
+                });
+            });
+        });
+    },
+
+    awaitLateQueue: function(fn) {
+        return new Promise(function(res, rej) {
+            Promise._async.invokeLater(function() {
+                try {
+                    var result = fn();
+                    res(result);
+                } catch(e) {
+                    rej(e);
+                }
+            }, null, null);
+        });
+    },
+
+    awaitProcessExit: function(fn) {
+        if (typeof process !== "undefined" && typeof process.execPath === "string") {
+            var exit;
+            return new Promise(function(resolve, reject) {
+                exit = process.exit;
+                process.exit = function(code) {
+                    try {
+                        assert(code != 0);
+                        fn();
+                        resolve();
+                    } catch (e) {
+                        reject(e);
+                    }
+                };
+            }).lastly(function() {
+                process.exit = exit;
             });
         } else {
             return Promise.delay(1);
         }
+    },
+
+    addDeferred: function(Promise) {
+        Promise.defer = Promise.pending = function() {
+            var ret = {};
+            ret.promise = new Promise(function(resolve, reject) {
+                ret.resolve = ret.fulfill = resolve;
+                ret.reject = reject;
+            });
+            return ret;
+        };
+        return Promise;
     },
 
     returnToken: function() {
@@ -201,6 +256,11 @@ module.exports = {
         assert.strictEqual(p.error(), v);
     },
 
+    ecmaScript6Collections: (typeof Set === "function" &&
+                            typeof Symbol !== "undefined" &&
+                            Symbol.iterator &&
+                            typeof ((new Set())[Symbol.iterator]().next) === "function"),
+
     ecmaScript5: (function() {"use strict"
       return this === undefined;
     })(),
@@ -209,7 +269,9 @@ module.exports = {
 
 if (module.exports.isNodeJS) {
     var version = process.versions.node.split(".").map(Number);
-    module.exports.isRecentNode = version[0] > 0 || version[1] > 10;
+    module.exports.isRecentNode = version[0] > 0;
+    module.exports.isOldNode = !module.exports.isRecentNode;
 } else {
+    module.exports.isOldNode = false;
     module.exports.isRecentNode = false;
 }

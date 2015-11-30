@@ -1,15 +1,16 @@
 "use strict";
 var firstLineError;
 try {throw new Error(); } catch (e) {firstLineError = e;}
-var ASSERT = require("./assert.js");
-var schedule = require("./schedule.js");
-var Queue = require("./queue.js");
-var util = require("./util.js");
+var ASSERT = require("./assert");
+var schedule = require("./schedule");
+var Queue = require("./queue");
+var util = require("./util");
 
 function Async() {
     this._isTickUsed = false;
     this._lateQueue = new Queue(LATE_QUEUE_CAPACITY);
     this._normalQueue = new Queue(NORMAL_QUEUE_CAPACITY);
+    this._haveDrainedQueues = false;
     this._trampolineEnabled = true;
     var self = this;
     this.drainQueues = function () {
@@ -25,17 +26,18 @@ Async.prototype.disableTrampolineIfNecessary = function() {
     }
 };
 
-Async.prototype.enableTrampoline = function() {
-    if (!this._trampolineEnabled) {
-        this._trampolineEnabled = true;
-        this._schedule = function(fn) {
-            setTimeout(fn, 0);
-        };
-    }
+Async.prototype.haveItemsQueued = function () {
+    return this._isTickUsed || this._haveDrainedQueues;
 };
 
-Async.prototype.haveItemsQueued = function () {
-    return this._normalQueue.length() > 0;
+
+Async.prototype.fatalError = function(e, isNode) {
+    if (isNode) {
+        process.stderr.write("Fatal " + (e instanceof Error ? e.stack : e));
+        process.exit(2);
+    } else {
+        this.throwLater(e);
+    }
 };
 
 // Must be used if fn can throw
@@ -140,6 +142,7 @@ Async.prototype._drainQueues = function () {
     ASSERT(this._isTickUsed);
     this._drainQueue(this._normalQueue);
     this._reset();
+    this._haveDrainedQueues = true;
     this._drainQueue(this._lateQueue);
 };
 
@@ -154,5 +157,5 @@ Async.prototype._reset = function () {
     this._isTickUsed = false;
 };
 
-module.exports = new Async();
+module.exports = Async;
 module.exports.firstLineError = firstLineError;

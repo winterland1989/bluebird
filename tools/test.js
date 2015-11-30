@@ -1,3 +1,4 @@
+process.env.BLUEBIRD_WARNINGS = 0;
 var assert = require("assert");
 assert.equal(require.main, module);
 var Promise = require("bluebird");
@@ -12,6 +13,7 @@ var rimraf = Promise.promisify(require("rimraf"));
 var jobRunner = require("./job-runner/job-runner.js");
 var mochaRunner = require("./mocha_runner.js");
 var fs = Promise.promisifyAll(require("fs"));
+var testUtils = require("../test/mocha/helpers/util");
 jobRunner.setVerbose(0);
 // Random slowness after tests complete
 function getTests(options) {
@@ -99,7 +101,8 @@ function writeCoverageFile(coverage, groupNumber) {
 }
 
 function needsFreshProcess(testName) {
-    return /domain|multiple-copies/.test(testName);
+    return /domain|multiple-copies|unhandled_rejections/.test(testName) ||
+            testUtils.isOldNode && /api_exceptions|promisify/.test(testName);
 }
 
 function runTestGroup(testGroup, options, progress) {

@@ -32,6 +32,7 @@ describe("spread", function () {
 
     it("spreads promises for arrays across arguments", function () {
         return Promise.resolve([Promise.resolve(10)])
+        .all()
         .spread(function (value) {
             assert.equal(value,10);
         });
@@ -41,7 +42,7 @@ describe("spread", function () {
         var deferredA = Promise.defer();
         var deferredB = Promise.defer();
 
-        var promise = Promise.resolve([deferredA.promise, deferredB.promise]).spread(
+        var promise = Promise.resolve([deferredA.promise, deferredB.promise]).all().spread(
                                function (a, b) {
             assert.equal(a,10);
             assert.equal(b,20);
@@ -69,27 +70,11 @@ describe("spread", function () {
             }
         };
 
-        var promise = Promise.resolve([p1, p2]).spread(function (a, b) {
+        var promise = Promise.resolve([p1, p2]).all().spread(function (a, b) {
             assert.equal(a,10);
             assert.equal(b,20);
         });
         return promise;
-    });
-
-    it("calls the errback when given a rejected promise", function() {
-        var err = new Error();
-        return Promise.all([Promise.resolve(10), Promise.reject(err)]).spread(assert.fail,
-            function(actual){
-            assert(actual === err);
-        });
-    });
-
-    it("calls the errback when given a rejected promise without all", function() {
-        var err = new Error();
-        return Promise.resolve([Promise.resolve(10), Promise.reject(err)]).spread(assert.fail,
-            function(actual){
-            assert(actual === err);
-        });
     });
 
     it("should wait for promises in the returned array even when not calling .all", function() {
@@ -103,7 +88,7 @@ describe("spread", function () {
         }, 1);
         return Promise.resolve().then(function(){
             return [d1.promise, d2.promise, d3.promise];
-        }).spread(function(a, b, c){
+        }).all().spread(function(a, b, c){
             assert(a === 1);
             assert(b === 2);
             assert(c === 3);
@@ -134,7 +119,7 @@ describe("spread", function () {
         };
         return Promise.resolve().then(function(){
             return [t1, t2, t3];
-        }).spread(function(a, b, c){
+        }).all().spread(function(a, b, c){
             assert(a === 1);
             assert(b === 2);
             assert(c === 3);
@@ -158,7 +143,7 @@ describe("spread", function () {
 
         return Promise.resolve().then(function(){
             return defer.promise;
-        }).spread(function(a, b, c){
+        }).all().spread(function(a, b, c){
             assert(a === 1);
             assert(b === 2);
             assert(c === 3);
@@ -198,7 +183,7 @@ describe("spread", function () {
 
         return Promise.resolve().then(function(){
             return thenable;
-        }).spread(function(a, b, c){
+        }).all().spread(function(a, b, c){
             assert(a === 1);
             assert(b === 2);
             assert(c === 3);
@@ -224,6 +209,20 @@ describe("spread", function () {
           assert.deepEqual([3, 4], a);
         });
     })
+
+    specify("error when passed non-function", function() {
+        return Promise.resolve(3)
+                .spread()
+                .then(assert.fail)
+                .caught(Promise.TypeError, function() {});
+    });
+
+    specify("error when resolution is non-spredable", function() {
+        return Promise.resolve(3)
+                .spread(function(){})
+                .then(assert.fail)
+                .caught(Promise.TypeError, function() {});
+    });
 });
 
 /*
@@ -258,7 +257,7 @@ describe("Promise.spread-test", function () {
     var slice = [].slice;
 
     specify("should return a promise", function() {
-        assert(typeof (Promise.defer().promise.spread().then) === "function");
+        assert(typeof (Promise.defer().promise.spread(function(){}).then) === "function");
     });
 
     specify("should apply onFulfilled with array as argument list", function() {
@@ -270,14 +269,14 @@ describe("Promise.spread-test", function () {
 
     specify("should resolve array contents", function() {
         var expected = [Promise.resolve(1), 2, Promise.resolve(3)];
-        return Promise.resolve(expected).spread(function() {
+        return Promise.resolve(expected).all().spread(function() {
             assert.deepEqual(slice.call(arguments), [1, 2, 3]);
         });
     });
 
     specify("should reject if any item in array rejects", function() {
         var expected = [Promise.resolve(1), 2, Promise.reject(3)];
-        return Promise.resolve(expected)
+        return Promise.resolve(expected).all()
             .spread(assert.fail)
             .then(assert.fail, function() {});
     });
@@ -291,7 +290,7 @@ describe("Promise.spread-test", function () {
 
     specify("should resolve array contents", function() {
         var expected = [Promise.resolve(1), 2, Promise.resolve(3)];
-        return Promise.resolve(Promise.resolve(expected)).spread(function() {
+        return Promise.resolve(Promise.resolve(expected)).all().spread(function() {
             assert.deepEqual(slice.call(arguments), [1, 2, 3]);
         });
     });

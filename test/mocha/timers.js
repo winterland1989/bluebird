@@ -49,53 +49,12 @@ describe("timeout", function () {
         })
     });
 
-    it("should pass through progress notifications", function() {
-        var deferred = Promise.defer();
-
-        var progressValsSeen = [];
-        var promise = Promise.resolve(deferred.promise).timeout(300).then(function () {
-            assert.deepEqual(progressValsSeen, [1, 2, 3]);
-        }, undefined, function (progressVal) {
-            progressValsSeen.push(progressVal);
-        });
-
-        Promise.resolve().then(function(){
-            deferred.progress(1);
-            deferred.progress(2);
-            deferred.progress(3);
-            deferred.resolve();
-        });
-        return promise;
-    });
-
     it("should reject with a custom timeout error if the promise is too slow and msg was provided", function() {
         return Promise.delay(1)
         .timeout(10, "custom")
         .caught(Promise.TimeoutError, function(e){
             assert(/custom/i.test(e.message));
         });
-    });
-
-    it("should reject with a custom error if an error was provided as a parameter", function() {
-        var err = Error("Testing Errors")
-        return Promise.delay(1)
-        .timeout(10, err)
-        .caught(function(e){
-            assert(e === err);
-        });
-    });
-    
-    it("should propagate the timeout error to cancellable parents", function() {
-        function doExpensiveOp() {
-            return new Promise(function() {
-
-            })
-            .cancellable()
-            .caught(Promise.TimeoutError, function(e) {
-            })
-        }
-
-        return doExpensiveOp().timeout(100);
     });
 
     var globalsAreReflectedInGlobalObject = (function(window) {
@@ -167,33 +126,12 @@ describe("delay", function () {
     });
 
     it("should delay after resolution", function () {
-        var promise1 = Promise.delay("what", 1);
+        var promise1 = Promise.delay(1, "what");
         var promise2 = promise1.delay(1);
 
         return promise2.then(function (value) {
             assert(value === "what");
         });
-    });
-
-    it("should pass through progress notifications from passed promises", function() {
-        var deferred = Promise.defer();
-
-        var progressValsSeen = [];
-        var promise = Promise.delay(deferred.promise, 1).then(function () {
-            assert.deepEqual(progressValsSeen, [1, 2, 3]);
-        }, undefined, function (progressVal) {
-            progressValsSeen.push(progressVal);
-        });
-
-        Promise.delay(1)
-            .then(function () { deferred.progress(1); })
-            .delay(1)
-            .then(function () { deferred.progress(2); })
-            .delay(1)
-            .then(function () { deferred.progress(3); })
-            .delay(1)
-            .then(function () { deferred.resolve(); });
-        return promise;
     });
 
     it("should resolve follower promise's value", function() {
@@ -207,8 +145,18 @@ describe("delay", function () {
             }, 1);
         });
         resolveF(v);
-        return Promise.delay(f, 1).then(function(value) {
+        return Promise.delay(1, f).then(function(value) {
             assert.equal(value, 3);
         });
     });
+
+    it("should reject with a custom error if an error was provided as a parameter", function() {
+        var err = Error("Testing Errors")
+        return Promise.delay(1)
+            .timeout(10, err)
+            .caught(function(e){
+                assert(e === err);
+            });
+    });
+
 });

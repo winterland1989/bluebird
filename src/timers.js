@@ -1,41 +1,42 @@
 "use strict";
 module.exports = function(Promise, INTERNAL) {
-var util = require("./util.js");
+var util = require("./util");
 var TimeoutError = Promise.TimeoutError;
 
 var afterTimeout = function (promise, message) {
     //Don't waste time concatting strings or creating stack traces
     if (!promise.isPending()) return;
-    
     var err;
-    if(!util.isPrimitive(message) && (message instanceof Error)) {
-        err = message;
-    } else {
-        if (typeof message !== "string") {
-            message = TIMEOUT_ERROR;
+    if (typeof message !== "string") {
+        if (message instanceof Error) {
+            err = message;
+        } else {
+            err = new TimeoutError(TIMEOUT_ERROR);
         }
+    } else {
         err = new TimeoutError(message);
     }
     util.markAsOriginatingFromRejection(err);
     promise._attachExtraTrace(err);
-    promise._cancel(err);
+    promise._reject(err);
 };
 
 var afterValue = function(value) { return delay(+this).thenReturn(value); };
-var delay = Promise.delay = function (value, ms) {
-    if (ms === undefined) {
-        ms = value;
-        value = undefined;
-        var ret = new Promise(INTERNAL);
-        setTimeout(function() { ret._fulfill(); }, ms);
-        return ret;
+var delay = Promise.delay = function (ms, value) {
+    var ret;
+    if (value !== undefined) {
+        ret = Promise.resolve(value)
+                ._then(afterValue, null, null, ms, undefined);
+    } else {
+        ret = new Promise(INTERNAL);
+        setTimeout(function() { ret._fulfill(); }, +ms);
     }
-    ms = +ms;
-    return Promise.resolve(value)._then(afterValue, null, null, ms, undefined);
+    ret._setAsyncGuaranteed();
+    return ret;
 };
 
 Promise.prototype.delay = function (ms) {
-    return delay(this, ms);
+    return delay(ms, this);
 };
 
 function successClear(value) {
@@ -54,8 +55,7 @@ function failureClear(reason) {
 
 Promise.prototype.timeout = function (ms, message) {
     ms = +ms;
-    var ret = this.then().cancellable();
-    ret._cancellationParent = this;
+    var ret = this.then();
     var handle = setTimeout(function timeoutTimeout() {
         afterTimeout(ret, message);
     }, ms);
