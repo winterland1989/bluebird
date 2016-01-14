@@ -6,14 +6,14 @@ title: Anti-patterns
 This page will contain common promise anti-patterns that are exercised in the wild.
 
 
-- [The deferred anti-pattern](#the-deferred-anti-pattern)
+- [The explicit construction anti-pattern](#the-explicit-construction-anti-pattern)
 - [The `.then(success, fail)` anti-pattern](#the-thensuccess-fail-anti-pattern)
 
-##The Deferred anti-pattern
+##The Explicit Construction Anti-Pattern
 
-This is the most common anti-pattern. It is easy to fall into this when you don't really understand promises and think of them as glorified event emitters or callback utility. It's also sometimes called the promise constructor anti-pattern. Let's recap: promises are about making asynchronous code retain most of the lost properties of synchronous code such as flat indentation and one exception channel.
+This is the most common anti-pattern. It is easy to fall into this when you don't really understand promises and think of them as glorified event emitters or callback utility. It's also sometimes called the promise constructor anti-pattern. Let's recap: promises are about making asynchronous code retain most of the lost properties of synchronous code such as flat indentation and one exception channel. This pattern is also called the deferred anti-pattern.
 
-In Deferred anti-pattern, "deferred" objects are created for no reason, complicating code.
+In the explicit construction anti-pattern, promise objects are created for no reason, complicating code.
 
 First example is creating deferred object when you already have a promise or thenable:
 
@@ -85,15 +85,14 @@ Second example is creating a function that does nothing but manually wrap a call
 
 ```js
 function applicationFunction(arg1) {
-    var deferred = Promise.pending(); //Or Q.defer() in Q
-    libraryFunction(arg1, function (err, value) {
+    return new Promise(function(resolve, reject){ //Or Q.defer() in Q
+      libraryFunction(arg1, function (err, value) {
         if (err) {
-            deferred.reject(err);
+          reject(err);
         } else {
-            deferred.fulfill(value);
+          resolve(value);
         }
     });
-    return deferred.promise;
 }
 ```
 

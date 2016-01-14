@@ -162,7 +162,7 @@ If destructuring parameters are supported, `.spread(function(arg1, arg2) {})` ca
 
 ###`async.series`
 
-Using [Promise.each](.) to implement the example from [async homepage](https://github.com/caolan/async#seriestasks-callback):
+Using [Promise.mapSeries](.) to implement the example from [async homepage](https://github.com/caolan/async#seriestasks-callback):
 
 ```js
 async.series([
@@ -184,9 +184,9 @@ function(err, results){
 ```
 
 ```js
-Promise.each([{timeout: 200, value: 1},
-              {timeout: 100, value: 2}], function(item) {
-    return Promise.delay(item.value, item.timeout);
+Promise.mapSeries([{timeout: 200, value: 1},
+                   {timeout: 100, value: 2}], function(item) {
+    return Promise.delay(item.timeout, item.value);
 }).then(function(results) {
     // results is now equal to [1, 2]
 });
@@ -256,7 +256,7 @@ async.map(['file1','file2','file3'], fs.stat, function(err, results){
 });
 ```
 
-```
+```js
 var fs = Promise.promisifyAll(require('fs'));
 Promise.map(['file1','file2','file3'], function(fileName, index, length) {
     return fs.statAsync(fileName);

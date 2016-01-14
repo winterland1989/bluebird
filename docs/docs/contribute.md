@@ -5,7 +5,7 @@ title: Contribute
 
 For development tasks such as contributing, running benchmarks or testing, you need to clone the repository and install dev-dependencies.
 
-Install [node](http://nodejs.org/) or [io.js](https://iojs.org/)
+Install [node](http://nodejs.org/)
 
     git clone git@github.com:petkaantonov/bluebird.git
     cd bluebird
@@ -78,13 +78,13 @@ To run all tests, run
 
     node tools/test
 
-If you need to run generator tests run the `tool/test.js` script with `--harmony` argument and node 0.11+:
+If you need to run generator tests in older versions of NodeJS run the `tool/test.js` script with `--harmony` argument and 0.11+:
 
     node-dev --harmony tools/test
 
-Or use io.js where generators are enabled by default:
+In recent versions of NodeJS where generators are enabled by default:
 
-    iojs tools/test
+    node tools/test
 
 You may specify an individual test file to run with the `--run` script flag:
 

@@ -3,6 +3,34 @@ id: changelog
 title: Changelog
 ---
 
+
+## 3.1.1 (2015-12-16)
+
+Bugfixes:
+
+ - Disable wForgottenWarning when all warnings are disabled
+
+
+## 3.1.0 (2015-12-16)
+
+Features:
+
+ - Added ability to configure the [forgotten return statement](http://bluebirdjs.com/docs/warning-explanations.html#warning-a-promise-was-created-in-a-handler-but-none-were-returned-from-it) warning separately \([#920](.)\).
+
+Bugfixes:
+
+- Fixed the bug where returning a value from [.finally](.) or [.tap](.) handler did not make a warning about a forgotten return go away \([#846](.)\).
+- Fixed the bug where setTimeout is used in Chrome instead of MutationObserver \([#915](.)\)
+- Fixed the bug where using [.bind](.) suppressed unhandled rejections \([#841](.)\)
+
+## 3.0.6 (2015-12-01)
+
+Bugfixes:
+
+ - Fix [.timeout()](.) not cancelling parent \([#891](.)\)
+ - Fix long stack traces when using [Promise.resolve()](.) \([#861](.)\)
+ - Fix [Promise.config()](.) not disabling long stack traces when passing `longStackTraces: false` \([#897](.)\)
+
 ## 3.0.5 (2015-11-01)
 
 Bugfixes:
